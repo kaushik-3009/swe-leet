@@ -13,7 +13,16 @@ function getLevel(count: number): number {
   return 4;
 }
 
-export default function Heatmap() {
+const MONTHS_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+interface Props {
+  refreshKey?: number;
+}
+
+export default function Heatmap({ refreshKey }: Props) {
   const [activities, setActivities] = useState<HeatmapActivity[]>([]);
   const [mounted, setMounted] = useState(false);
 
@@ -26,7 +35,7 @@ export default function Heatmap() {
     }));
     setActivities(result);
     setMounted(true);
-  }, []);
+  }, [refreshKey]);
 
   if (!mounted) {
     return (
@@ -34,42 +43,49 @@ export default function Heatmap() {
     );
   }
 
-  const year = new Date().getFullYear();
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const year = now.getFullYear();
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   return (
     <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <h2 className="text-lg font-semibold text-white mb-4">
-        Activity — {year}
-      </h2>
+      <div className="flex items-baseline gap-3 mb-4">
+        <h2 className="text-lg font-semibold text-white">Activity</h2>
+        <span className="text-emerald-400 font-medium text-sm">
+          {MONTHS_LONG[currentMonth]} {year}
+        </span>
+      </div>
       <div className="overflow-x-auto">
-        <div className="flex gap-1 min-w-max">
-          {months.map((m) => (
-            <ActivityHeatmapMonth
-              key={`${m}-${year}`}
-              activities={activities}
-              month={m}
-              year={year}
-              cellStyle={{ borderRadius: "0.2rem" }}
-              monthNameStyle={{ fontWeight: "600", fontSize: "0.75rem", color: "#9ca3af" }}
-              tooltipStyle={{
-                border: "1px solid #374151",
-                backgroundColor: "#1f2937",
-                color: "#f9fafb",
-                fontSize: "0.75rem",
-              }}
-              customCellColors={{
-                level0: "#1f2937",
-                level1: "#064e3b",
-                level2: "#047857",
-                level3: "#059669",
-                level4: "#10b981",
-              }}
-              monthNameFormat="short"
-            />
-          ))}
+        <div className="origin-top-left" style={{ transform: "scale(0.85)", transformOrigin: "top left" }}>
+          <div className="flex gap-3 min-w-max">
+            {months.map((m) => (
+              <ActivityHeatmapMonth
+                key={`${m}-${year}`}
+                activities={activities}
+                month={m}
+                year={year}
+                cellStyle={{ borderRadius: "0.2rem" }}
+                monthNameStyle={{ fontWeight: "600", fontSize: "0.7rem", color: "#9ca3af" }}
+                tooltipStyle={{
+                  border: "1px solid #374151",
+                  backgroundColor: "#1f2937",
+                  color: "#f9fafb",
+                  fontSize: "0.75rem",
+                }}
+                customCellColors={{
+                  level0: "#1f2937",
+                  level1: "#064e3b",
+                  level2: "#047857",
+                  level3: "#059669",
+                  level4: "#10b981",
+                }}
+                monthNameFormat="short"
+              />
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1 mt-3 text-xs text-gray-500">
+        <div className="flex items-center gap-1.5 mt-3 text-xs text-gray-500">
           <span>Less</span>
           <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#1f2937" }} />
           <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#064e3b" }} />

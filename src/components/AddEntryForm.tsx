@@ -33,9 +33,9 @@ export default function AddEntryForm({ onAdded }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+    <form onSubmit={handleSubmit} className="bg-gray-900 rounded-xl p-5 sm:p-6 border border-gray-800">
       <h2 className="text-lg font-semibold text-white mb-4">Log Study Session</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div className="space-y-4 mb-4">
         <div className="relative">
           <label className="block text-sm text-gray-400 mb-1">Topic</label>
           <input
@@ -82,7 +82,7 @@ export default function AddEntryForm({ onAdded }: Props) {
       <button
         type="submit"
         disabled={!topic.trim() || !resource.trim()}
-        className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
       >
         Add Entry
       </button>

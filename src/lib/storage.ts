@@ -55,3 +55,50 @@ export function getStudyDays(): number {
   const entries = getEntries();
   return new Set(entries.map((e) => e.date)).size;
 }
+
+export function seedDemoData(): void {
+  const topics = [
+    ["Load Balancing", "System Design Interview by Alex Xu, Ch. 1"],
+    ["Caching", "System Design Interview by Alex Xu, Ch. 2"],
+    ["Rate Limiting", "Grokking System Design"],
+    ["Message Queues", "Designing Data-Intensive Applications, Ch. 11"],
+    ["Database Sharding", "System Design Interview by Alex Xu, Ch. 5"],
+    ["Consistent Hashing", "Grokking System Design"],
+    ["CDN", "System Design Interview by Alex Xu, Ch. 4"],
+    ["SQL vs NoSQL", "Designing Data-Intensive Applications, Ch. 2"],
+    ["CAP Theorem", "MIT 6.824 Lecture Notes"],
+    ["Microservices", "Building Microservices by Sam Newman"],
+    ["API Gateway", "System Design Interview by Alex Xu, Ch. 6"],
+    ["WebSockets", "Grokking System Design"],
+    ["Bloom Filters", "Designing Data-Intensive Applications, Ch. 7"],
+    ["Leader Election", "MIT 6.824 Lecture Notes"],
+    ["Pub/Sub", "Grokking System Design"],
+  ];
+
+  const entries = getEntries();
+  const today = new Date();
+
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split("T")[0];
+
+    const count = Math.random() > 0.4 ? Math.floor(Math.random() * 3) + 1 : 0;
+    for (let j = 0; j < count; j++) {
+      const [topic, resource] = topics[Math.floor(Math.random() * topics.length)];
+      entries.unshift({
+        id: crypto.randomUUID(),
+        topic,
+        resource,
+        date: dateStr,
+        createdAt: d.getTime(),
+      });
+    }
+  }
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+}
+
+export function clearAllData(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}

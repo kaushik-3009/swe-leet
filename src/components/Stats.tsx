@@ -30,7 +30,7 @@ export default function Stats({ refreshKey }: Props) {
 
   if (!mounted) {
     return (
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[1, 2, 3].map((i) => (
           <div
             key={i}
@@ -48,7 +48,7 @@ export default function Stats({ refreshKey }: Props) {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
       {cards.map((card) => (
         <div
           key={card.label}
