@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActivityHeatmapMonth } from "react-activity-heatmap";
 import type { HeatmapActivity } from "react-activity-heatmap";
-import { getHeatmapData } from "@/lib/storage";
+import { getHeatmapData, getStudyDays } from "@/lib/storage";
 
 function getLevel(count: number): number {
   if (count === 0) return 0;
@@ -24,7 +24,11 @@ interface Props {
 
 export default function Heatmap({ refreshKey }: Props) {
   const [activities, setActivities] = useState<HeatmapActivity[]>([]);
+  const [studyDays, setStudyDays] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [scale, setScale] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const data = getHeatmapData();
@@ -34,12 +38,33 @@ export default function Heatmap({ refreshKey }: Props) {
       level: getLevel(count),
     }));
     setActivities(result);
+    setStudyDays(getStudyDays());
     setMounted(true);
   }, [refreshKey]);
 
+  useEffect(() => {
+    if (!mounted) return;
+
+    function updateScale() {
+      const container = containerRef.current;
+      const content = contentRef.current;
+      if (!container || !content) return;
+
+      const containerWidth = container.offsetWidth;
+      const contentWidth = content.scrollWidth;
+      const newScale = Math.min(1, containerWidth / contentWidth);
+      setScale(newScale);
+    }
+
+    updateScale();
+    const observer = new ResizeObserver(updateScale);
+    if (containerRef.current) observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [mounted, activities]);
+
   if (!mounted) {
     return (
-      <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 animate-pulse h-48" />
+      <div className="rounded-xl h-52 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
     );
   }
 
@@ -49,16 +74,48 @@ export default function Heatmap({ refreshKey }: Props) {
   const months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   return (
-    <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-      <div className="flex items-baseline gap-3 mb-4">
-        <h2 className="text-lg font-semibold text-white">Activity</h2>
-        <span className="text-emerald-400 font-medium text-sm">
-          {MONTHS_LONG[currentMonth]} {year}
-        </span>
+    <div
+      className="rounded-xl"
+      style={{
+        background: "var(--card)",
+        border: "1px solid var(--border)",
+        padding: "24px 26px 20px",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-baseline gap-2 mb-5">
+        <h2
+          className="text-[15px] font-semibold flex items-baseline gap-2.5"
+          style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}
+        >
+          Activity
+          <span className="text-[13px] font-medium" style={{ color: "var(--accent)" }}>
+            · {MONTHS_LONG[currentMonth]} {year}
+          </span>
+        </h2>
+        <div
+          className="text-[11.5px] px-2.5 py-1 rounded-full"
+          style={{
+            fontFamily: "var(--font-display)",
+            color: "var(--text-secondary)",
+            background: "var(--card-elevated)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          Current streak: <b style={{ color: "var(--accent)", fontWeight: 600 }}>{studyDays} days</b>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <div className="origin-top-left" style={{ transform: "scale(0.85)", transformOrigin: "top left" }}>
-          <div className="flex gap-3 min-w-max">
+
+      <div ref={containerRef} className="overflow-hidden">
+        <div
+          ref={contentRef}
+          style={{
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            height: scale < 1 ? `${160 * scale}px` : undefined,
+          }}
+        >
+          <div className="flex gap-3">
             {months.map((m) => (
               <ActivityHeatmapMonth
                 key={`${m}-${year}`}
@@ -66,34 +123,39 @@ export default function Heatmap({ refreshKey }: Props) {
                 month={m}
                 year={year}
                 cellStyle={{ borderRadius: "0.2rem" }}
-                monthNameStyle={{ fontWeight: "600", fontSize: "0.7rem", color: "#9ca3af" }}
+                monthNameStyle={{ fontWeight: "600", fontSize: "0.7rem", color: "var(--text-tertiary)", fontFamily: "var(--font-display)" }}
                 tooltipStyle={{
-                  border: "1px solid #374151",
-                  backgroundColor: "#1f2937",
-                  color: "#f9fafb",
+                  border: "1px solid var(--border-strong)",
+                  background: "var(--card-elevated)",
+                  color: "var(--text-primary)",
                   fontSize: "0.75rem",
+                  fontFamily: "var(--font-body)",
                 }}
                 customCellColors={{
-                  level0: "#1f2937",
-                  level1: "#064e3b",
-                  level2: "#047857",
-                  level3: "#059669",
-                  level4: "#10b981",
+                  level0: "var(--heatmap-0)",
+                  level1: "var(--heatmap-1)",
+                  level2: "var(--heatmap-2)",
+                  level3: "var(--heatmap-3)",
+                  level4: "var(--heatmap-4)",
                 }}
                 monthNameFormat="short"
               />
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-1.5 mt-3 text-xs text-gray-500">
-          <span>Less</span>
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#1f2937" }} />
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#064e3b" }} />
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#047857" }} />
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#059669" }} />
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "#10b981" }} />
-          <span>More</span>
-        </div>
+      </div>
+
+      <div
+        className="flex items-center gap-2 mt-3 text-xs"
+        style={{ fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}
+      >
+        Less
+        <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-0)" }} />
+        <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-1)" }} />
+        <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-2)" }} />
+        <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-3)" }} />
+        <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-4)" }} />
+        More
       </div>
     </div>
   );

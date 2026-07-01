@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+*.md
+!README.md
+!**/README.md
+redesign-mockup.html
+DESIGN.md

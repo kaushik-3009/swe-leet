@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>System Design Tracker — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d13;
+    --bg-grid: rgba(255,255,255,0.025);
+    --card:#12151d;
+    --card-elevated:#161a24;
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.14);
+    --text-primary:#eef0f4;
+    --text-secondary:#9aa2b1;
+    --text-tertiary:#5c6373;
+    --accent:#22c893;
+    --accent-dim: rgba(34,200,147,0.12);
+    --accent-dim-border: rgba(34,200,147,0.35);
+    --accent-glow: rgba(34,200,147,0.18);
+    --danger: #e5675f;
+    --font-display: 'IBM Plex Mono', monospace;
+    --font-body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    padding: 56px 24px 80px;
+  }
+  .wrap{ max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .header{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+  .eyebrow{
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:6px; height:6px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    display:inline-block;
+  }
+  h1{
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .subtitle{ color: var(--text-secondary); font-size: 14.5px; }
+
+  .header-actions{ display:flex; gap:10px; }
+  .btn{
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 7px;
+    border: 1px solid var(--border-strong);
+    background: var(--card-elevated);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all .15s ease;
+    display:flex; align-items:center; gap:7px;
+  }
+  .btn:hover{ border-color: var(--text-tertiary); color: var(--text-primary); background:#1b202b; }
+  .btn.danger:hover{ border-color: var(--danger); color: var(--danger); }
+  .btn.primary{
+    background: var(--accent);
+    color: #06231a;
+    border: 1px solid var(--accent);
+  }
+  .btn.primary:hover{ background:#33d6a3; box-shadow: 0 0 0 4px var(--accent-dim); }
+  .btn.primary:disabled{
+    background: #1b2a26;
+    color: #4a5c56;
+    border-color: var(--border);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Stat cards */
+  .stats{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card{
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 22px 20px;
+    overflow: hidden;
+  }
+  .stat-card::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, var(--stat-color, var(--accent)), transparent 70%);
+    opacity:.8;
+  }
+  .stat-card .corner{
+    position:absolute; top:10px; right:10px;
+    width:14px; height:14px;
+    border-top:1px solid var(--border-strong);
+    border-right:1px solid var(--border-strong);
+    opacity:.6;
+  }
+  .stat-top{
+    display:flex; justify-content: space-between; align-items:flex-start;
+    margin-bottom: 18px;
+  }
+  .stat-icon{
+    width:30px; height:30px;
+    border-radius:7px;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--stat-bg, var(--accent-dim));
+    color: var(--stat-color, var(--accent));
+  }
+  .stat-icon svg{ width:16px; height:16px; }
+  .stat-label{
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    font-family: var(--font-display);
+  }
+  .stat-value{
+    font-family: var(--font-display);
+    font-size: 34px;
+    font-weight: 600;
+    line-height:1;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+  .stat-sub{ font-size: 12.5px; color: var(--text-tertiary); }
+  .stat-sub.positive{ color: var(--accent); }
+
+  /* Activity card — left untouched in spirit, just wrapped better */
+  .activity-card{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 26px 28px 22px;
+    margin-bottom: 28px;
+  }
+  .activity-head{
+    display:flex; justify-content: space-between; align-items:baseline;
+    margin-bottom: 22px;
+  }
+  .activity-head h2{
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    display:flex; align-items:baseline; gap:10px;
+  }
+  .activity-head h2 .period{
+    color: var(--accent);
+    font-weight: 500;
+    font-size: 13px;
+  }
+  .streak-pill{
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 20px;
+  }
+  .streak-pill b{ color: var(--accent); font-weight:600; }
+
+  /* placeholder for the heatmap grid user wants kept as-is */
+  .heatmap-placeholder{
+    height: 190px;
+    border: 1px dashed var(--border-strong);
+    border-radius: 8px;
+    display:flex; align-items:center; justify-content:center;
+    color: var(--text-tertiary);
+    font-family: var(--font-display);
+    font-size: 12px;
+    letter-spacing: .04em;
+    margin-bottom: 16px;
+    background: repeating-linear-gradient(135deg, rgba(255,255,255,.015) 0 10px, transparent 10px 20px);
+  }
+
+  .legend{
+    display:flex; align-items:center; gap:8px;
+    font-size: 12px; color: var(--text-tertiary);
+    font-family: var(--font-display);
+  }
+  .legend .sq{ width:11px; height:11px; border-radius:2px; }
+
+  /* Bottom grid */
+  .bottom{
+    display:grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px){ .bottom{ grid-template-columns: 1fr; } .stats{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+  }
+  .panel h2{
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight:600;
+    margin-bottom: 20px;
+    display:flex; align-items:center; gap:9px;
+  }
+  .panel h2 .idx{
+    color: var(--accent);
+    font-size:13px;
+  }
+
+  label{
+    display:block;
+    font-size: 12.5px;
+    font-weight:600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    margin-top: 18px;
+  }
+  label:first-of-type{ margin-top:0; }
+  input{
+    width:100%;
+    background: #0d1017;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 11px 13px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 14px;
+    outline:none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input::placeholder{ color: var(--text-tertiary); }
+  input:focus{
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .field-hint{
+    font-size:11.5px;
+    color: var(--text-tertiary);
+    margin-top: 6px;
+  }
+
+  .add-btn{
+    margin-top: 22px;
+    width: 100%;
+    justify-content:center;
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Empty state */
+  .empty-state{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    height: 100%;
+    min-height: 300px;
+    color: var(--text-secondary);
+    gap: 14px;
+  }
+  .empty-icon{
+    width:52px; height:52px;
+    border-radius:12px;
+    border: 1px solid var(--border-strong);
+    background: var(--card-elevated);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--text-tertiary);
+  }
+  .empty-icon svg{ width:24px; height:24px; }
+  .empty-title{ font-weight:600; color: var(--text-primary); font-size:15px; }
+  .empty-sub{ font-size: 13px; color: var(--text-tertiary); max-width: 320px; }
+  .empty-cta{
+    margin-top:6px;
+    font-family: var(--font-display);
+    font-size:11.5px;
+    color: var(--accent);
+    letter-spacing:.03em;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="header">
+    <div>
+      <div class="eyebrow">Study Log</div>
+      <h1>System Design Tracker</h1>
+      <p class="subtitle">Track your system design study progress and stay consistent.</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+        Load Demo Data
+      </button>
+      <button class="btn danger">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg>
+        Clear All
+      </button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card" style="--stat-color:#22c893; --stat-bg: rgba(34,200,147,0.12)">
+      <div class="corner"></div>
+      <div class="stat-top">
+        <div>
+          <div class="stat-label">Total Entries</div>
+        </div>
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+      </div>
+      <div class="stat-value">0</div>
+      <div class="stat-sub">Log your first session below</div>
+    </div>
+
+    <div class="stat-card" style="--stat-color:#5eb8ff; --stat-bg: rgba(94,184,255,0.12)">
+      <div class="corner"></div>
+      <div class="stat-top">
+        <div>
+          <div class="stat-label">Study Days</div>
+        </div>
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+      </div>
+      <div class="stat-value">0</div>
+      <div class="stat-sub">No active streak yet</div>
+    </div>
+
+    <div class="stat-card" style="--stat-color:#e5a03e; --stat-bg: rgba(229,160,62,0.12)">
+      <div class="corner"></div>
+      <div class="stat-top">
+        <div>
+          <div class="stat-label">Unique Topics</div>
+        </div>
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L4 3a1 1 0 00-1 1l.24 5.59a2 2 0 00.58 1.41l9.59 9.59a2 2 0 002.83 0l4.35-4.35a2 2 0 000-2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+        </div>
+      </div>
+      <div class="stat-value">0</div>
+      <div class="stat-sub">Across all sessions</div>
+    </div>
+  </div>
+
+  <div class="activity-card">
+    <div class="activity-head">
+      <h2>Activity <span class="period">· July 2026</span></h2>
+      <div class="streak-pill">Current streak: <b>0 days</b></div>
+    </div>
+
+    <!-- Heatmap grid intentionally left as-is per your existing implementation -->
+    <div class="heatmap-placeholder">[ existing month-grid heatmap component stays here, unchanged ]</div>
+
+    <div class="legend">
+      Less
+      <span class="sq" style="background:#1b202b"></span>
+      <span class="sq" style="background:#0f4a3a"></span>
+      <span class="sq" style="background:#157a5c"></span>
+      <span class="sq" style="background:#1eab80"></span>
+      <span class="sq" style="background:#22c893"></span>
+      More
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="panel">
+      <h2><span class="idx">＋</span> Log Study Session</h2>
+      <label for="topic">Topic</label>
+      <input id="topic" placeholder="e.g. Load Balancing" />
+      <div class="field-hint">The concept or pattern you studied</div>
+
+      <label for="resource">Resource</label>
+      <input id="resource" placeholder="e.g. System Design Interview by Alex Xu, Ch. 3" />
+      <div class="field-hint">Where you learned it — book, video, article</div>
+
+      <button class="btn primary add-btn" disabled>Add Entry</button>
+    </div>
+
+    <div class="panel">
+      <h2><span class="idx">·</span> Recent Sessions</h2>
+      <div class="empty-state">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+        <div class="empty-title">No entries yet</div>
+        <div class="empty-sub">Log your first study session on the left to start building your streak.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
