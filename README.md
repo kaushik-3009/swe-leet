@@ -2,7 +2,7 @@
 
 # System Design Tracker
 
-A study log and streak tracker for system design prep — the LeetCode heatmap, for the part of interview prep that doesn't have one.
+A study log and streak tracker for system design prep: the LeetCode heatmap and accountability aid, for the part of interview prep that doesn't have one.
 
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
