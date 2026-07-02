@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /seed
+Disallow: /sessions
+
+Sitemap: https://sd-tracker.vercel.app/sitemap.xml
