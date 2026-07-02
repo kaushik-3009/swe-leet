@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>System Design Tracker — Redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0a0d13;
+    --bg-grid: rgba(255,255,255,0.025);
+    --card:#12151d;
+    --card-elevated:#161a24;
+    --border: rgba(255,255,255,0.07);
+    --border-strong: rgba(255,255,255,0.14);
+    --text-primary:#eef0f4;
+    --text-secondary:#9aa2b1;
+    --text-tertiary:#5c6373;
+    --accent:#22c893;
+    --accent-dim: rgba(34,200,147,0.12);
+    --accent-dim-border: rgba(34,200,147,0.35);
+    --accent-glow: rgba(34,200,147,0.18);
+    --danger: #e5675f;
+    --font-display: 'IBM Plex Mono', monospace;
+    --font-body: 'Inter', sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background-color: var(--bg);
+    background-image:
+      linear-gradient(var(--bg-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--bg-grid) 1px, transparent 1px);
+    background-size: 32px 32px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    padding: 56px 24px 80px;
+  }
+  .wrap{ max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .header{
+    display:flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+    gap: 20px;
+  }
+  .eyebrow{
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:6px; height:6px;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    display:inline-block;
+  }
+  h1{
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin-bottom: 8px;
+  }
+  .subtitle{ color: var(--text-secondary); font-size: 14.5px; }
+
+  .header-actions{ display:flex; gap:10px; }
+  .btn{
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 7px;
+    border: 1px solid var(--border-strong);
+    background: var(--card-elevated);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all .15s ease;
+    display:flex; align-items:center; gap:7px;
+  }
+  .btn:hover{ border-color: var(--text-tertiary); color: var(--text-primary); background:#1b202b; }
+  .btn.danger:hover{ border-color: var(--danger); color: var(--danger); }
+  .btn.primary{
+    background: var(--accent);
+    color: #06231a;
+    border: 1px solid var(--accent);
+  }
+  .btn.primary:hover{ background:#33d6a3; box-shadow: 0 0 0 4px var(--accent-dim); }
+  .btn.primary:disabled{
+    background: #1b2a26;
+    color: #4a5c56;
+    border-color: var(--border);
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* Stat cards */
+  .stats{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card{
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 22px 20px;
+    overflow: hidden;
+  }
+  .stat-card::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:2px;
+    background: linear-gradient(90deg, var(--stat-color, var(--accent)), transparent 70%);
+    opacity:.8;
+  }
+  .stat-card .corner{
+    position:absolute; top:10px; right:10px;
+    width:14px; height:14px;
+    border-top:1px solid var(--border-strong);
+    border-right:1px solid var(--border-strong);
+    opacity:.6;
+  }
+  .stat-top{
+    display:flex; justify-content: space-between; align-items:flex-start;
+    margin-bottom: 18px;
+  }
+  .stat-icon{
+    width:30px; height:30px;
+    border-radius:7px;
+    display:flex; align-items:center; justify-content:center;
+    background: var(--stat-bg, var(--accent-dim));
+    color: var(--stat-color, var(--accent));
+  }
+  .stat-icon svg{ width:16px; height:16px; }
+  .stat-label{
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    font-family: var(--font-display);
+  }
+  .stat-value{
+    font-family: var(--font-display);
+    font-size: 34px;
+    font-weight: 600;
+    line-height:1;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+  .stat-sub{ font-size: 12.5px; color: var(--text-tertiary); }
+  .stat-sub.positive{ color: var(--accent); }
+
+  /* Activity card — left untouched in spirit, just wrapped better */
+  .activity-card{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 26px 28px 22px;
+    margin-bottom: 28px;
+  }
+  .activity-head{
+    display:flex; justify-content: space-between; align-items:baseline;
+    margin-bottom: 22px;
+  }
+  .activity-head h2{
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 600;
+    display:flex; align-items:baseline; gap:10px;
+  }
+  .activity-head h2 .period{
+    color: var(--accent);
+    font-weight: 500;
+    font-size: 13px;
+  }
+  .streak-pill{
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    padding: 5px 10px;
+    border-radius: 20px;
+  }
+  .streak-pill b{ color: var(--accent); font-weight:600; }
+
+  /* Activity heatmap — jagged per-month silhouette, kept, restyled */
+  .heatmap{
+    display:flex;
+    gap: 18px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 18px;
+  }
+  .month-block{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 8px;
+    flex: 0 0 auto;
+  }
+  .month-grid{
+    display:grid;
+    grid-template-rows: repeat(7, 12px);
+    grid-auto-flow: column;
+    gap: 3px;
+  }
+  .cell{
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: var(--cell-bg, #1a1f29);
+  }
+  .cell.empty{
+    background: transparent;
+  }
+  .cell[data-level]{ position:relative; }
+  .cell[data-level]:hover::after{
+    content: attr(data-tip);
+    position:absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #05080d;
+    border: 1px solid var(--border-strong);
+    color: var(--text-primary);
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    white-space: nowrap;
+    padding: 4px 7px;
+    border-radius: 5px;
+    z-index: 5;
+    pointer-events:none;
+  }
+  .month-label{
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    letter-spacing: .02em;
+  }
+
+  .legend{
+    display:flex; align-items:center; gap:8px;
+    font-size: 12px; color: var(--text-tertiary);
+    font-family: var(--font-display);
+  }
+  .legend .sq{ width:11px; height:11px; border-radius:2px; }
+
+  /* Bottom grid */
+  .bottom{
+    display:grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 800px){ .bottom{ grid-template-columns: 1fr; } .stats{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+  }
+  .panel h2{
+    font-family: var(--font-display);
+    font-size: 16px;
+    font-weight:600;
+    margin-bottom: 20px;
+    display:flex; align-items:center; gap:9px;
+  }
+  .panel h2 .idx{
+    color: var(--accent);
+    font-size:13px;
+  }
+
+  label{
+    display:block;
+    font-size: 12.5px;
+    font-weight:600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    margin-top: 18px;
+  }
+  label:first-of-type{ margin-top:0; }
+  input{
+    width:100%;
+    background: #0d1017;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 11px 13px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 14px;
+    outline:none;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  input::placeholder{ color: var(--text-tertiary); }
+  input:focus{
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  .field-hint{
+    font-size:11.5px;
+    color: var(--text-tertiary);
+    margin-top: 6px;
+  }
+
+  .add-btn{
+    margin-top: 22px;
+    width: 100%;
+    justify-content:center;
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Empty state */
+  .empty-state{
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center;
+    height: 100%;
+    min-height: 300px;
+    color: var(--text-secondary);
+    gap: 14px;
+  }
+  .empty-icon{
+    width:52px; height:52px;
+    border-radius:12px;
+    border: 1px solid var(--border-strong);
+    background: var(--card-elevated);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--text-tertiary);
+  }
+  .empty-icon svg{ width:24px; height:24px; }
+  .empty-title{ font-weight:600; color: var(--text-primary); font-size:15px; }
+  .empty-sub{ font-size: 13px; color: var(--text-tertiary); max-width: 320px; }
+  /* ===== Recent Sessions — 3 variants ===== */
+  .variant-switch{
+    display:flex; gap:6px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+  }
+  .variant-switch button{
+    font-family: var(--font-display);
+    font-size: 11px;
+    letter-spacing:.03em;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .variant-switch button.active{
+    background: var(--card-elevated);
+    color: var(--accent);
+    border: 1px solid var(--border-strong);
+  }
+  .variant-switch button:not(.active):hover{ color: var(--text-secondary); }
+
+  .panel.sessions{ display:flex; flex-direction:column; }
+  .panel-head{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom: 20px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .panel-head h2{ margin-bottom:0; }
+  .view-all{
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    color: var(--accent);
+    background: var(--accent-dim);
+    border: 1px solid var(--accent-dim-border);
+    padding: 6px 11px;
+    border-radius: 20px;
+    cursor:pointer;
+  }
+
+  .date-heading{
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    letter-spacing: .08em;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    margin: 18px 0 8px;
+  }
+  .date-heading:first-child{ margin-top:0; }
+
+  .session-row{
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    transition: border-color .15s ease;
+  }
+  .session-row:hover{ border-color: var(--border-strong); }
+  .session-topic{ font-weight:600; font-size:14px; margin-bottom:2px; }
+  .session-resource{ font-size:12.5px; color: var(--text-tertiary); }
+
+  /* --- Variant 1: contained scroll --- */
+  .v-scroll{
+    position:relative;
+    max-height: 480px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .v-scroll::-webkit-scrollbar{ width:6px; }
+  .v-scroll::-webkit-scrollbar-thumb{ background: var(--border-strong); border-radius:4px; }
+  .v-scroll::-webkit-scrollbar-track{ background: transparent; }
+  .scroll-fade{
+    position:absolute; left:0; right:6px; bottom:0; height:48px;
+    background: linear-gradient(to bottom, transparent, var(--card));
+    pointer-events:none;
+  }
+  .scroll-wrap{ position:relative; }
+
+  /* --- Variant 2: compact grid --- */
+  .v-grid{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-content:start;
+  }
+  .v-grid .session-row{ margin-bottom:0; }
+  .v-grid .session-date{
+    font-family: var(--font-display);
+    font-size: 10px;
+    color: var(--text-tertiary);
+    margin-bottom: 6px;
+  }
+  @media (max-width: 950px){ .v-grid{ grid-template-columns: 1fr; } }
+
+  /* --- Variant 3: paginated --- */
+  .v-page-controls{
+    display:flex; justify-content:center; align-items:center; gap:14px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  .page-btn{
+    font-family: var(--font-display);
+    font-size:12px;
+    color: var(--text-secondary);
+    background: var(--card-elevated);
+    border: 1px solid var(--border-strong);
+    padding: 7px 13px;
+    border-radius: 6px;
+    cursor:pointer;
+  }
+  .page-btn:hover{ color: var(--text-primary); border-color: var(--text-tertiary); }
+  .page-btn:disabled{ opacity:.35; cursor:not-allowed; }
+  /* ===== Log Study Session — empty-space fill variants ===== */
+  .bottom.align-start{ align-items: start; }
+
+  .fill-switch{
+    display:flex; gap:6px; flex-wrap:wrap;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 3px;
+    margin-bottom: 22px;
+  }
+  .fill-switch button{
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    letter-spacing:.02em;
+    color: var(--text-tertiary);
+    background: transparent;
+    border: none;
+    padding: 6px 9px;
+    border-radius: 6px;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .fill-switch button.active{
+    background: var(--card-elevated);
+    color: var(--accent);
+    border: 1px solid var(--border-strong);
+  }
+  .fill-switch button:not(.active):hover{ color: var(--text-secondary); }
+
+  #fillArea{ margin-top: 24px; }
+
+  /* Quick fill chips */
+  .fill-label{
+    font-family: var(--font-display);
+    font-size: 10.5px;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 10px;
+  }
+  .quickfill-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .qf-chip{
+    font-size: 12.5px;
+    color: var(--text-secondary);
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    padding: 7px 12px;
+    border-radius: 20px;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .qf-chip:hover{ border-color: var(--accent-dim-border); color: var(--accent); }
+
+  /* Weekly goal — per-day session count bars */
+  .goal-card{
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 18px;
+  }
+  .goal-top{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:12px; }
+  .goal-top .goal-title{ font-size:13.5px; font-weight:600; }
+  .goal-top .goal-frac{
+    font-family: var(--font-display);
+    font-size:12px;
+    color: var(--accent);
+  }
+  .goal-bar-track{
+    height:7px; border-radius:20px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    overflow:hidden;
+    margin-bottom: 18px;
+  }
+  .goal-bar-fill{
+    height:100%;
+    background: linear-gradient(90deg, #157a5c, var(--accent));
+    border-radius:20px;
+  }
+  .goal-days{
+    display:flex;
+    justify-content:space-between;
+    gap: 7px;
+  }
+  .goal-day{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 7px;
+    flex: 1;
+  }
+  .goal-day-count{
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--text-secondary);
+    height: 14px;
+  }
+  .goal-day.future .goal-day-count{ color: var(--text-tertiary); }
+  .goal-day-bar-track{
+    width: 100%;
+    height: 52px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    display:flex;
+    align-items:flex-end;
+    overflow:hidden;
+  }
+  .goal-day.future .goal-day-bar-track{
+    border-style: dashed;
+    border-color: var(--border);
+  }
+  .goal-day-bar-fill{
+    width:100%;
+    background: linear-gradient(180deg, var(--accent), #157a5c);
+    border-radius: 3px 3px 0 0;
+    transition: height .2s ease;
+  }
+  .goal-day-label{
+    font-family: var(--font-display);
+    font-size: 10px;
+    letter-spacing:.03em;
+    color: var(--text-tertiary);
+  }
+  .goal-day.today{ position:relative; }
+  .goal-day.today .goal-day-label{ color: var(--accent); font-weight:600; }
+  .goal-day.today .goal-day-bar-track{ border-color: var(--accent-dim-border); }
+  .goal-day-dot{
+    width:4px; height:4px; border-radius:50%;
+    background: var(--accent);
+    margin-top: -2px;
+  }
+
+  /* Topic coverage */
+  .coverage-card{ display:flex; flex-direction:column; gap:10px; }
+  .coverage-row{ display:flex; align-items:center; gap:10px; }
+  .coverage-name{ font-size:12px; color: var(--text-secondary); width:92px; flex-shrink:0; }
+  .coverage-bar-track{
+    flex:1; height:6px; border-radius:20px;
+    background: var(--card-elevated); border:1px solid var(--border);
+    overflow:hidden;
+  }
+  .coverage-bar-fill{ height:100%; background: var(--accent); border-radius:20px; }
+  .coverage-count{
+    font-family: var(--font-display); font-size:11px; color: var(--text-tertiary);
+    width:16px; text-align:right; flex-shrink:0;
+  }
+
+  /* Quick quiz */
+  .quiz-card{
+    background: var(--card-elevated); border:1px solid var(--border);
+    border-radius:9px; padding:18px;
+  }
+  .quiz-tag{
+    font-family: var(--font-display); font-size:10px; letter-spacing:.06em;
+    color: var(--accent); text-transform:uppercase; margin-bottom:10px;
+    display:flex; align-items:center; gap:6px;
+  }
+  .quiz-question{ font-size:13.5px; color: var(--text-primary); line-height:1.5; margin-bottom:12px; }
+  .quiz-answer{
+    font-size:12.5px; color: var(--text-secondary); line-height:1.5;
+    background: var(--bg); border:1px solid var(--border); border-radius:7px;
+    padding:11px 13px; margin-bottom:12px; display:none;
+  }
+  .quiz-answer.show{ display:block; }
+  .quiz-toggle{
+    font-family: var(--font-display); font-size:11px; color: var(--accent);
+    background:transparent; border:1px solid var(--accent-dim-border);
+    padding:6px 12px; border-radius:6px; cursor:pointer;
+  }
+  .quiz-toggle:hover{ background: var(--accent-dim); }
+
+  /* Countdown */
+  .countdown-card{
+    background: var(--card-elevated); border:1px solid var(--border);
+    border-radius:9px; padding:18px;
+    display:flex; align-items:center; gap:16px;
+  }
+  .countdown-num{
+    font-family: var(--font-display); font-size:32px; font-weight:600;
+    color: var(--accent); line-height:1;
+  }
+  .countdown-text{ font-size:12.5px; color: var(--text-secondary); line-height:1.4; }
+  .countdown-text b{ color: var(--text-primary); }
+
+  /* Coverage gaps */
+  .gaps-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .gap-chip{
+    font-size:12px; color: var(--text-tertiary);
+    background: transparent; border:1px dashed var(--border-strong);
+    padding:6px 11px; border-radius:20px; cursor:pointer;
+    display:flex; align-items:center; gap:5px;
+    transition: all .15s ease;
+  }
+  .gap-chip:hover{ color: var(--accent); border-color: var(--accent-dim-border); border-style:solid; }
+
+  .tip-card{
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 18px;
+    position:relative;
+  }
+  .tip-card .tip-quote-mark{
+    font-family: var(--font-display);
+    font-size: 28px;
+    color: var(--accent-dim-border);
+    line-height:1;
+    margin-bottom: 6px;
+  }
+  .tip-card .tip-text{ font-size:13.5px; color: var(--text-secondary); line-height:1.55; margin-bottom:12px; }
+  .tip-card .tip-suggest{
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--accent);
+    display:flex; align-items:center; gap:6px;
+    cursor:pointer;
+  }
+ */
+  #dashboard-view, #all-sessions-view{ }
+  #all-sessions-view{ display:none; }
+
+  .back-link{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family: var(--font-display);
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor:pointer;
+    margin-bottom: 18px;
+    transition: color .15s ease;
+  }
+  .back-link:hover{ color: var(--accent); }
+
+  .as-header{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    margin-bottom: 26px;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .as-header h1{ margin-bottom: 6px; }
+  .as-count{ color: var(--text-secondary); font-size: 14px; }
+  .as-count b{ color: var(--accent); font-weight:600; }
+
+  .as-controls{
+    display:flex; gap:10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .search-box{
+    flex: 1 1 260px;
+    position:relative;
+  }
+  .search-box svg{
+    position:absolute; left:12px; top:50%; transform:translateY(-50%);
+    color: var(--text-tertiary);
+    width:15px; height:15px;
+  }
+  .search-box input{ padding-left: 36px; }
+
+  select.sort-select{
+    background: #0d1017;
+    border: 1px solid var(--border-strong);
+    border-radius: 7px;
+    padding: 11px 13px;
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 13.5px;
+    outline:none;
+    cursor:pointer;
+  }
+  select.sort-select:focus{ border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+
+  .filter-chips{
+    display:flex; gap:8px; flex-wrap:wrap;
+    margin-bottom: 22px;
+  }
+  .chip{
+    font-family: var(--font-display);
+    font-size: 11.5px;
+    color: var(--text-secondary);
+    background: var(--card);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .chip.active{
+    color: var(--accent);
+    background: var(--accent-dim);
+    border-color: var(--accent-dim-border);
+  }
+  .chip:not(.active):hover{ border-color: var(--border-strong); color: var(--text-primary); }
+
+  .as-list-panel{
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 26px;
+  }
+  .as-row{
+    display:flex; justify-content:space-between; align-items:center;
+    background: var(--card-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 13px 15px;
+    margin-bottom: 8px;
+  }
+  .as-row:hover{ border-color: var(--border-strong); }
+  .as-row-main .session-topic{ margin-bottom: 3px; }
+  .as-row-date{
+    font-family: var(--font-display);
+    font-size: 11px;
+    color: var(--text-tertiary);
+    white-space:nowrap;
+    margin-left: 16px;
+  }
+  .as-row-actions{
+    display:flex; gap:6px;
+    margin-left: 14px;
+  }
+  .as-icon-btn{
+    width:28px; height:28px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:transparent;
+    color: var(--text-tertiary);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer;
+    transition: all .15s ease;
+  }
+  .as-icon-btn:hover{ border-color: var(--border-strong); color: var(--text-primary); }
+  .as-icon-btn.delete:hover{ border-color: var(--danger); color: var(--danger); }
+  .as-icon-btn svg{ width:13px; height:13px; }
+
+  .as-empty{
+    text-align:center;
+    padding: 50px 20px;
+    color: var(--text-tertiary);
+    font-size: 13.5px;
+  }
+
+  .as-pagination{
+    display:flex; justify-content:center; align-items:center; gap:14px;
+    margin-top: 22px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div id="dashboard-view">
+  <div class="header">
+    <div>
+      <div class="eyebrow">Study Log</div>
+      <h1>System Design Tracker</h1>
+      <p class="subtitle">Track your system design study progress and stay consistent.</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16"/></svg>
+        Load Demo Data
+      </button>
+      <button class="btn danger">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg>
+        Clear All
+      </button>
+    </div>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card" style="--stat-color:#22c893; --stat-bg: rgba(34,200,147,0.12)">
+      <div class="corner"></div>
+      <div class="stat-top">
+        <div>
+          <div class="stat-label">Total Entries</div>
+        </div>
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        </div>
+      </div>
+      <div class="stat-value">0</div>
+      <div class="stat-sub">Log your first session below</div>
+    </div>
+
+    <div class="stat-card" style="--stat-color:#5eb8ff; --stat-bg: rgba(94,184,255,0.12)">
+      <div class="corner"></div>
+      <div class="stat-top">
+        <div>
+          <div class="stat-label">Study Days</div>
+        </div>
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        </div>
+      </div>
+      <div class="stat-value">0</div>
+      <div class="stat-sub">No active streak yet</div>
+    </div>
+
+    <div class="stat-card" style="--stat-color:#e5a03e; --stat-bg: rgba(229,160,62,0.12)">
+      <div class="corner"></div>
+      <div class="stat-top">
+        <div>
+          <div class="stat-label">Unique Topics</div>
+        </div>
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41L11 3.83A2 2 0 009.59 3.24L4 3a1 1 0 00-1 1l.24 5.59a2 2 0 00.58 1.41l9.59 9.59a2 2 0 002.83 0l4.35-4.35a2 2 0 000-2.83z"/><circle cx="7.5" cy="7.5" r="1.5"/></svg>
+        </div>
+      </div>
+      <div class="stat-value">0</div>
+      <div class="stat-sub">Across all sessions</div>
+    </div>
+  </div>
+
+  <div class="activity-card">
+    <div class="activity-head">
+      <h2>Activity <span class="period">· July 2026</span></h2>
+      <div class="streak-pill">Current streak: <b>0 days</b></div>
+    </div>
+
+    <!-- Jagged per-month heatmap: each month is its own grid, day cells
+         before the 1st / after the last day are transparent so the
+         silhouette stays irregular and months stay visually distinct. -->
+    <div class="heatmap" id="heatmap"></div>
+
+    <div class="legend">
+      Less
+      <span class="sq" style="background:#1a1f29"></span>
+      <span class="sq" style="background:#0f4a3a"></span>
+      <span class="sq" style="background:#157a5c"></span>
+      <span class="sq" style="background:#1eab80"></span>
+      <span class="sq" style="background:#22c893"></span>
+      More
+    </div>
+  </div>
+
+  <div class="bottom" id="bottomGrid">
+    <div class="panel">
+      <h2><span class="idx">＋</span> Log Study Session</h2>
+      <label for="topic">Topic</label>
+      <input id="topic" placeholder="e.g. Load Balancing" />
+      <div class="field-hint">The concept or pattern you studied</div>
+
+      <label for="resource">Resource</label>
+      <input id="resource" placeholder="e.g. System Design Interview by Alex Xu, Ch. 3" />
+      <div class="field-hint">Where you learned it — book, video, article</div>
+
+      <button class="btn primary add-btn" disabled>Add Entry</button>
+
+      <div class="fill-switch" style="margin-top:24px;">
+        <button class="active" data-fill="minimal">Minimal</button>
+        <button data-fill="quickfill">Quick Fill</button>
+        <button data-fill="goal">Weekly Goal</button>
+        <button data-fill="tip">Study Tip</button>
+        <button data-fill="coverage">Coverage</button>
+        <button data-fill="quiz">Quick Quiz</button>
+        <button data-fill="countdown">Countdown</button>
+        <button data-fill="gaps">Gaps</button>
+      </div>
+
+      <div id="fillArea"></div>
+    </div>
+
+    <div class="panel sessions">
+      <div class="panel-head">
+        <h2><span class="idx">·</span> Recent Sessions</h2>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="variant-switch">
+            <button class="active" data-variant="scroll">Scroll</button>
+            <button data-variant="grid">Grid</button>
+            <button data-variant="paginated">Paginated</button>
+          </div>
+          <div class="view-all" id="viewAllBtn">View All</div>
+        </div>
+      </div>
+      <div id="sessions-container"></div>
+    </div>
+  </div>
+</div><!-- /dashboard-view -->
+
+<div id="all-sessions-view">
+  <div class="back-link" id="backLink">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5m0 0l7 7m-7-7l7-7"/></svg>
+    Back to Dashboard
+  </div>
+
+  <div class="as-header">
+    <div>
+      <h1>All Sessions</h1>
+      <div class="as-count"><b id="asCount">16</b> sessions logged</div>
+    </div>
+  </div>
+
+  <div class="as-controls">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="asSearch" placeholder="Search by topic or resource..." />
+    </div>
+    <select class="sort-select" id="asSort">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="az">Topic A–Z</option>
+    </select>
+  </div>
+
+  <div class="filter-chips" id="asChips">
+    <div class="chip active" data-month="all">All time</div>
+    <div class="chip" data-month="2026-07">Jul 2026</div>
+    <div class="chip" data-month="2026-06">Jun 2026</div>
+  </div>
+
+  <div class="as-list-panel">
+    <div id="asListContainer"></div>
+  </div>
+</div><!-- /all-sessions-view -->
+
+</div><!-- /wrap -->
+
+<script>
+  // Sample data — mirrors the real entries visible in your screenshot plus
+  // extras, so the overflow behavior is representative of real usage.
+  const SESSIONS = [
+    { date:'Thu, Jul 2, 2026', topic:'iuiu', resource:'iui' },
+    { date:'Sun, Jun 28, 2026', topic:'Microservices', resource:'Building Microservices by Sam Newman' },
+    { date:'Sat, Jun 27, 2026', topic:'Leader Election', resource:'MIT 6.824 Lecture Notes' },
+    { date:'Sat, Jun 27, 2026', topic:'WebSockets', resource:'Grokking System Design' },
+    { date:'Sat, Jun 27, 2026', topic:'Consistent Hashing', resource:'Grokking System Design' },
+    { date:'Fri, Jun 26, 2026', topic:'Bloom Filters', resource:'Designing Data-Intensive Applications, Ch. 7' },
+    { date:'Fri, Jun 26, 2026', topic:'Rate Limiting', resource:'System Design Interview by Alex Xu, Ch. 4' },
+    { date:'Thu, Jun 25, 2026', topic:'CAP Theorem', resource:'MIT 6.824 Lecture Notes' },
+    { date:'Wed, Jun 24, 2026', topic:'Sharding Strategies', resource:'Designing Data-Intensive Applications, Ch. 6' },
+    { date:'Wed, Jun 24, 2026', topic:'Load Balancing', resource:'Grokking System Design' },
+    { date:'Tue, Jun 23, 2026', topic:'Message Queues', resource:'Kafka: The Definitive Guide' },
+    { date:'Mon, Jun 22, 2026', topic:'Database Indexing', resource:'Use The Index, Luke' },
+    { date:'Sun, Jun 21, 2026', topic:'CDN Architecture', resource:'System Design Interview by Alex Xu, Ch. 9' },
+    { date:'Sat, Jun 20, 2026', topic:'Circuit Breakers', resource:'Release It! by Michael Nygard' },
+    { date:'Fri, Jun 19, 2026', topic:'Vector Clocks', resource:'Designing Data-Intensive Applications, Ch. 5' },
+    { date:'Thu, Jun 18, 2026', topic:'Idempotency Keys', resource:'Stripe Engineering Blog' },
+  ];
+
+  const container = document.getElementById('sessions-container');
+  let currentPage = 0;
+  const PAGE_SIZE = 5;
+
+  function groupByDate(items){
+    const groups = [];
+    let lastDate = null;
+    items.forEach(item => {
+      if (item.date !== lastDate){
+        groups.push({ date: item.date, items: [] });
+        lastDate = item.date;
+      }
+      groups[groups.length - 1].items.push(item);
+    });
+    return groups;
+  }
+
+  function renderRows(items){
+    return groupByDate(items).map(g => `
+      <div class="date-heading">${g.date}</div>
+      ${g.items.map(s => `
+        <div class="session-row">
+          <div class="session-topic">${s.topic}</div>
+          <div class="session-resource">${s.resource}</div>
+        </div>
+      `).join('')}
+    `).join('');
+  }
+
+  function renderScroll(){
+    container.innerHTML = `
+      <div class="scroll-wrap">
+        <div class="v-scroll">${renderRows(SESSIONS)}</div>
+        <div class="scroll-fade"></div>
+      </div>
+    `;
+  }
+
+  function renderGrid(){
+    const cards = SESSIONS.map(s => `
+      <div class="session-row">
+        <div class="session-date">${s.date.split(',').slice(0,2).join(',')}</div>
+        <div class="session-topic">${s.topic}</div>
+        <div class="session-resource">${s.resource}</div>
+      </div>
+    `).join('');
+    container.innerHTML = `<div class="v-grid">${cards}</div>`;
+  }
+
+  function renderPaginated(){
+    const totalPages = Math.ceil(SESSIONS.length / PAGE_SIZE);
+    currentPage = Math.min(currentPage, totalPages - 1);
+    const start = currentPage * PAGE_SIZE;
+    const pageItems = SESSIONS.slice(start, start + PAGE_SIZE);
+    container.innerHTML = `
+      <div>${renderRows(pageItems)}</div>
+      <div class="v-page-controls">
+        <button class="page-btn" id="prevPage" ${currentPage === 0 ? 'disabled' : ''}>← Prev</button>
+        <div class="page-dots">Page <b>${currentPage + 1}</b> of ${totalPages}</div>
+        <button class="page-btn" id="nextPage" ${currentPage === totalPages - 1 ? 'disabled' : ''}>Next →</button>
+      </div>
+    `;
+    document.getElementById('prevPage').onclick = () => { currentPage--; renderPaginated(); };
+    document.getElementById('nextPage').onclick = () => { currentPage++; renderPaginated(); };
+  }
+
+  const RENDERERS = { scroll: renderScroll, grid: renderGrid, paginated: renderPaginated };
+
+  document.querySelectorAll('.variant-switch button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.variant-switch button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentPage = 0;
+      RENDERERS[btn.dataset.variant]();
+    });
+  });
+
+  renderScroll(); // default view
+</script>
+
+<script>
+  // ===== Log Study Session — empty-space fill variants =====
+  const FILL_RENDERERS = {
+    minimal(){
+      document.getElementById('bottomGrid').classList.add('align-start');
+      return '';
+    },
+    quickfill(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      const recent = ['Load Balancing', 'Rate Limiting', 'Sharding', 'CAP Theorem', 'Message Queues'];
+      return `
+        <div class="fill-label">Quick fill — recently studied</div>
+        <div class="quickfill-chips">
+          ${recent.map(t => `<div class="qf-chip">${t}</div>`).join('')}
+        </div>
+      `;
+    },
+    goal(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      // Mon–Sun, today = Wed (index 2). Future days show as empty/dashed
+      // since they haven't happened yet, not as "0 sessions logged".
+      const labels = ['M','T','W','T','F','S','S'];
+      const counts = [2, 1, 1, null, null, null, null]; // null = future day
+      const todayIdx = 2;
+      const weekTotal = counts.reduce((sum, c) => sum + (c || 0), 0);
+      const weeklyGoal = 5;
+      const maxCount = Math.max(1, ...counts.filter(c => c !== null));
+      const pct = Math.min(100, Math.round((weekTotal / weeklyGoal) * 100));
+
+      const days = labels.map((label, i) => {
+        const isFuture = counts[i] === null;
+        const count = counts[i] || 0;
+        const barHeight = count === 0 ? 0 : Math.max(18, Math.round((count / maxCount) * 100));
+        return `
+          <div class="goal-day ${i === todayIdx ? 'today' : ''} ${isFuture ? 'future' : ''}">
+            <div class="goal-day-count">${isFuture ? '' : count}</div>
+            <div class="goal-day-bar-track">
+              ${count > 0 ? `<div class="goal-day-bar-fill" style="height:${barHeight}%"></div>` : ''}
+            </div>
+            <div class="goal-day-label">${label}</div>
+            ${i === todayIdx ? '<div class="goal-day-dot"></div>' : ''}
+          </div>
+        `;
+      }).join('');
+
+      return `
+        <div class="fill-label">This week</div>
+        <div class="goal-card">
+          <div class="goal-top">
+            <div class="goal-title">Weekly study goal</div>
+            <div class="goal-frac">${weekTotal} / ${weeklyGoal} sessions</div>
+          </div>
+          <div class="goal-bar-track"><div class="goal-bar-fill" style="width:${pct}%"></div></div>
+          <div class="goal-days">${days}</div>
+        </div>
+      `;
+    },
+    tip(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      return `
+        <div class="fill-label">Study tip</div>
+        <div class="tip-card">
+          <div class="tip-quote-mark">"</div>
+          <div class="tip-text">When learning a new pattern, sketch the data flow before the components — it forces you to justify every box you draw.</div>
+          <div class="tip-suggest">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+            Suggested next: Consistent Hashing
+          </div>
+        </div>
+      `;
+    },
+    coverage(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      const cats = [
+        { name:'Scalability', count:8, pct:100 },
+        { name:'Databases', count:6, pct:75 },
+        { name:'Networking', count:5, pct:62 },
+        { name:'Caching', count:4, pct:50 },
+        { name:'Consensus', count:2, pct:25 },
+      ];
+      return `
+        <div class="fill-label">Topic coverage</div>
+        <div class="coverage-card">
+          ${cats.map(c => `
+            <div class="coverage-row">
+              <div class="coverage-name">${c.name}</div>
+              <div class="coverage-bar-track"><div class="coverage-bar-fill" style="width:${c.pct}%"></div></div>
+              <div class="coverage-count">${c.count}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    },
+    quiz(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      return `
+        <div class="fill-label">Quick quiz</div>
+        <div class="quiz-card">
+          <div class="quiz-tag">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 2-3 4"/><path d="M12 17h.01"/></svg>
+            Pop quiz
+          </div>
+          <div class="quiz-question">What problem does consistent hashing solve in a distributed cache?</div>
+          <div class="quiz-answer" id="quizAnswer">It minimizes key remapping when nodes are added or removed — only ~1/N of keys move instead of nearly all of them.</div>
+          <button class="quiz-toggle" id="quizToggle">Reveal answer</button>
+        </div>
+      `;
+    },
+    countdown(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      return `
+        <div class="fill-label">Goal countdown</div>
+        <div class="countdown-card">
+          <div class="countdown-num">23</div>
+          <div class="countdown-text">days until your <b>system design interview</b> — pace yourself at ~1 topic/day to stay on track.</div>
+        </div>
+      `;
+    },
+    gaps(){
+      document.getElementById('bottomGrid').classList.remove('align-start');
+      const gaps = ['Distributed Transactions', 'Vector Clocks', 'Gossip Protocols', 'CRDTs', 'Chaos Engineering'];
+      return `
+        <div class="fill-label">Not covered yet</div>
+        <div class="gaps-chips">
+          ${gaps.map(g => `<div class="gap-chip">+ ${g}</div>`).join('')}
+        </div>
+      `;
+    }
+  };
+
+  const fillArea = document.getElementById('fillArea');
+
+  function bindQuizToggle(){
+    const toggle = document.getElementById('quizToggle');
+    if (!toggle) return;
+    toggle.addEventListener('click', () => {
+      const ans = document.getElementById('quizAnswer');
+      ans.classList.toggle('show');
+      toggle.textContent = ans.classList.contains('show') ? 'Hide answer' : 'Reveal answer';
+    });
+  }
+
+  document.querySelectorAll('.fill-switch button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fill-switch button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      fillArea.innerHTML = FILL_RENDERERS[btn.dataset.fill]();
+      bindQuizToggle();
+    });
+  });
+
+  fillArea.innerHTML = FILL_RENDERERS.minimal(); // default view
+</script>
+
+<script>
+  // ===== All Sessions view =====
+  let asPage = 0;
+  const AS_PAGE_SIZE = 8;
+  let asSearchTerm = '';
+  let asSortMode = 'newest';
+  let asMonthFilter = 'all';
+
+  function parseDate(str){
+    // "Thu, Jul 2, 2026" -> Date
+    return new Date(str.split(', ').slice(1).join(', '));
+  }
+
+  function monthKey(str){
+    const d = parseDate(str);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
+
+  function getFilteredSessions(){
+    let items = SESSIONS.slice();
+
+    if (asMonthFilter !== 'all'){
+      items = items.filter(s => monthKey(s.date) === asMonthFilter);
+    }
+
+    if (asSearchTerm.trim()){
+      const q = asSearchTerm.trim().toLowerCase();
+      items = items.filter(s =>
+        s.topic.toLowerCase().includes(q) || s.resource.toLowerCase().includes(q)
+      );
+    }
+
+    if (asSortMode === 'az'){
+      items.sort((a,b) => a.topic.localeCompare(b.topic));
+    } else if (asSortMode === 'oldest'){
+      items.sort((a,b) => parseDate(a.date) - parseDate(b.date));
+    }
+    // 'newest' — SESSIONS is already newest-first by construction
+
+    return items;
+  }
+
+  function trashIcon(){
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0l-1 14a2 2 0 01-2 2H7a2 2 0 01-2-2L4 6"/></svg>`;
+  }
+  function editIcon(){
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+  }
+
+  function renderAllSessions(){
+    const filtered = getFilteredSessions();
+    document.getElementById('asCount').textContent = filtered.length;
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / AS_PAGE_SIZE));
+    asPage = Math.min(asPage, totalPages - 1);
+
+    const listEl = document.getElementById('asListContainer');
+
+    if (filtered.length === 0){
+      listEl.innerHTML = `<div class="as-empty">No sessions match your search.</div>`;
+      return;
+    }
+
+    const start = asPage * AS_PAGE_SIZE;
+    const pageItems = filtered.slice(start, start + AS_PAGE_SIZE);
+
+    listEl.innerHTML = pageItems.map(s => `
+      <div class="as-row">
+        <div class="as-row-main">
+          <div class="session-topic">${s.topic}</div>
+          <div class="session-resource">${s.resource}</div>
+        </div>
+        <div style="display:flex; align-items:center;">
+          <div class="as-row-date">${s.date}</div>
+          <div class="as-row-actions">
+            <button class="as-icon-btn" title="Edit">${editIcon()}</button>
+            <button class="as-icon-btn delete" title="Delete">${trashIcon()}</button>
+          </div>
+        </div>
+      </div>
+    `).join('') + `
+      <div class="as-pagination">
+        <button class="page-btn" id="asPrev" ${asPage === 0 ? 'disabled' : ''}>← Prev</button>
+        <div class="page-dots">Page <b>${asPage + 1}</b> of ${totalPages}</div>
+        <button class="page-btn" id="asNext" ${asPage === totalPages - 1 ? 'disabled' : ''}>Next →</button>
+      </div>
+    `;
+
+    document.getElementById('asPrev').onclick = () => { asPage--; renderAllSessions(); };
+    document.getElementById('asNext').onclick = () => { asPage++; renderAllSessions(); };
+  }
+
+  document.getElementById('asSearch').addEventListener('input', e => {
+    asSearchTerm = e.target.value;
+    asPage = 0;
+    renderAllSessions();
+  });
+
+  document.getElementById('asSort').addEventListener('change', e => {
+    asSortMode = e.target.value;
+    asPage = 0;
+    renderAllSessions();
+  });
+
+  document.querySelectorAll('#asChips .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#asChips .chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      asMonthFilter = chip.dataset.month;
+      asPage = 0;
+      renderAllSessions();
+    });
+  });
+
+  function showAllSessions(){
+    document.getElementById('dashboard-view').style.display = 'none';
+    document.getElementById('all-sessions-view').style.display = 'block';
+    asPage = 0;
+    renderAllSessions();
+    window.scrollTo(0,0);
+  }
+
+  function showDashboard(){
+    document.getElementById('all-sessions-view').style.display = 'none';
+    document.getElementById('dashboard-view').style.display = 'block';
+    window.scrollTo(0,0);
+  }
+
+  document.getElementById('viewAllBtn').addEventListener('click', showAllSessions);
+  document.getElementById('backLink').addEventListener('click', showDashboard);
+</script>
+
+<script>
+  // Same silhouette logic as the original component: each month renders its
+  // own 7-row (Sun–Sat) grid, columns flow left→right by week. Cells before
+  // day 1 and after the last day of the month are transparent — that's what
+  // produces the jagged top/bottom edge per month, and because each month
+  // starts a fresh grid, months stay visually separate with their own shape.
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const YEAR = 2026;
+  const LEVEL_COLORS = ['#1a1f29', '#0f4a3a', '#157a5c', '#1eab80', '#22c893'];
+
+  // deterministic pseudo-random so the demo looks the same every load
+  function seededRandom(seed){
+    let s = seed;
+    return function(){
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+
+  }
+  const rand = seededRandom(42);
+
+  function levelFor(monthIdx, day){
+    // sparser toward "today" (Jul 1, 2026) and beyond, like a real in-progress year
+    const cutoffMonth = 6; // July = index 6, current per app state
+    if (monthIdx > cutoffMonth) return -1; // no data yet — future, fully empty
+    const r = rand();
+    if (r < 0.34) return -1; // empty day
+    if (r < 0.55) return 0;
+    if (r < 0.72) return 1;
+    if (r < 0.86) return 2;
+    if (r < 0.96) return 3;
+    return 4;
+  }
+
+  const heatmapContainer = document.getElementById('heatmap');
+
+  MONTHS.forEach((name, mIdx) => {
+    const daysInMonth = new Date(YEAR, mIdx + 1, 0).getDate();
+    const firstWeekday = new Date(YEAR, mIdx, 1).getDay(); // 0 = Sun
+
+    const block = document.createElement('div');
+    block.className = 'month-block';
+
+    const grid = document.createElement('div');
+    grid.className = 'month-grid';
+    const weeks = Math.ceil((daysInMonth + firstWeekday) / 7);
+    grid.style.gridTemplateColumns = `repeat(${weeks}, 12px)`;
+
+    // leading empty cells to offset the 1st onto the right weekday row
+    for (let i = 0; i < firstWeekday; i++){
+      const cell = document.createElement('div');
+      cell.className = 'cell empty';
+      grid.appendChild(cell);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++){
+      const cell = document.createElement('div');
+      const lvl = levelFor(mIdx, day);
+      if (lvl === -1){
+        cell.className = 'cell';
+        cell.style.setProperty('--cell-bg', LEVEL_COLORS[0]);
+        cell.dataset.tip = `${name} ${day} — no session`;
+      } else {
+        cell.className = 'cell';
+        cell.style.setProperty('--cell-bg', LEVEL_COLORS[lvl]);
+        cell.dataset.tip = `${name} ${day} — ${lvl + 1} ${lvl === 0 ? 'entry' : 'entries'}`;
+      }
+      cell.dataset.level = lvl;
+      grid.appendChild(cell);
+    }
+
+    // trailing empty cells to complete the last week column
+    const totalCellsUsed = firstWeekday + daysInMonth;
+    const trailing = weeks * 7 - totalCellsUsed;
+    for (let i = 0; i < trailing; i++){
+      const cell = document.createElement('div');
+      cell.className = 'cell empty';
+      grid.appendChild(cell);
+    }
+
+    const label = document.createElement('div');
+    label.className = 'month-label';
+    label.textContent = name;
+
+    block.appendChild(grid);
+    block.appendChild(label);
+    heatmapContainer.appendChild(block);
+  });
+</script>
+</body>
+</html>

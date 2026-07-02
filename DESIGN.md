@@ -1,6 +1,6 @@
 # System Design Tracker — Visual Redesign
 
-Quick redesign pass on the existing dark-mode tracker UI. The activity heatmap component is untouched — everything else (header, stat cards, form, empty state, buttons) has been reworked for hierarchy, contrast, and a more intentional visual identity.
+Quick redesign pass on the existing dark-mode tracker UI.
 
 See `redesign-mockup.html` for the live mockup.
 
@@ -8,7 +8,7 @@ See `redesign-mockup.html` for the live mockup.
 
 ## Design rationale
 
-The subject is a personal study-tracking tool for system design / LLD prep — used by an engineer, alone, daily. That context suggested leaning into an **engineering-log / schematic aesthetic** rather than a generic SaaS dashboard look: monospace for data and labels (the way a terminal or a spec doc would render numbers), thin corner-bracket marks on cards (like technical drawing annotations), and a subtle background grid (graph paper, not decoration).
+The subject is a personal study-tracking tool for system design / LLD prep.
 
 This also gives the accent color a job: teal now means "signal" — active state, streak, focus ring — instead of being sprinkled wherever a button happened to need color.
 
@@ -78,14 +78,3 @@ Same overall structure as the original — this is a styling pass, not a rearran
 6. **Empty state** — icon + title + explanatory line instead of a single gray sentence, and it matches the visual language of the stat card icons.
 7. **Contrast** — secondary/tertiary text lightened slightly across the board for legibility.
 8. **Accent discipline** — teal is now used only for: streak/active state, focus rings, and the primary CTA. It no longer appears incidentally (e.g., the July 2026 label uses it only because that's the "current period," which is itself a state).
-
-## What was intentionally left alone
-
-- The activity heatmap grid itself (structure, cell shapes, month layout) — kept exactly as-is per your note. It's wrapped in the same card treatment as everything else for consistency, but its internals aren't touched.
-- Overall page structure / component order.
-
-## Suggested next steps
-
-- Swap `redesign-mockup.html`'s placeholder `<div class="heatmap-placeholder">` back out for your real heatmap component when integrating.
-- If entries get logged, the "Recent Sessions" panel will need a real list-item style — happy to design that (topic + resource + date, probably a compact row with the same corner-bracket/monospace-date treatment) when you're ready.
-- Consider applying the same token set (`--bg`, `--card`, `--accent`, etc.) as CSS variables in your actual Tailwind config so the whole app inherits this system rather than just this page.

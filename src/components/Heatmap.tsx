@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityHeatmapMonth } from "react-activity-heatmap";
 import type { HeatmapActivity } from "react-activity-heatmap";
-import { getHeatmapData, getStudyDays } from "@/lib/storage";
+import { getUserEntries, getHeatmapDataFromEntries } from "@/lib/firestore";
 
 function getLevel(count: number): number {
   if (count === 0) return 0;
@@ -20,9 +20,10 @@ const MONTHS_LONG = [
 
 interface Props {
   refreshKey?: number;
+  userId: string;
 }
 
-export default function Heatmap({ refreshKey }: Props) {
+export default function Heatmap({ refreshKey, userId }: Props) {
   const [activities, setActivities] = useState<HeatmapActivity[]>([]);
   const [studyDays, setStudyDays] = useState(0);
   const [mounted, setMounted] = useState(false);
@@ -31,16 +32,20 @@ export default function Heatmap({ refreshKey }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const data = getHeatmapData();
-    const result: HeatmapActivity[] = Object.entries(data).map(([date, count]) => ({
-      date: new Date(date + "T12:00:00"),
-      count,
-      level: getLevel(count),
-    }));
-    setActivities(result);
-    setStudyDays(getStudyDays());
-    setMounted(true);
-  }, [refreshKey]);
+    async function load() {
+      const entries = await getUserEntries(userId);
+      const data = getHeatmapDataFromEntries(entries);
+      const result: HeatmapActivity[] = Object.entries(data).map(([date, count]) => ({
+        date: new Date(date + "T12:00:00"),
+        count,
+        level: getLevel(count),
+      }));
+      setActivities(result);
+      setStudyDays(new Set(entries.map((e) => e.date)).size);
+      setMounted(true);
+    }
+    load();
+  }, [refreshKey, userId]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -49,7 +54,6 @@ export default function Heatmap({ refreshKey }: Props) {
       const container = containerRef.current;
       const content = contentRef.current;
       if (!container || !content) return;
-
       const containerWidth = container.offsetWidth;
       const contentWidth = content.scrollWidth;
       const newScale = Math.min(1, containerWidth / contentWidth);
@@ -76,45 +80,23 @@ export default function Heatmap({ refreshKey }: Props) {
   return (
     <div
       className="rounded-xl"
-      style={{
-        background: "var(--card)",
-        border: "1px solid var(--border)",
-        padding: "24px 26px 20px",
-        boxShadow: "var(--shadow-sm)",
-      }}
+      style={{ background: "var(--card)", border: "1px solid var(--border)", padding: "24px 26px 20px", boxShadow: "var(--shadow-sm)" }}
     >
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-baseline gap-2 mb-5">
-        <h2
-          className="text-[15px] font-semibold flex items-baseline gap-2.5"
-          style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}
-        >
+        <h2 className="text-[15px] font-semibold flex items-baseline gap-2.5" style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
           Activity
-          <span className="text-[13px] font-medium" style={{ color: "var(--accent)" }}>
-            · {MONTHS_LONG[currentMonth]} {year}
-          </span>
+          <span className="text-[13px] font-medium" style={{ color: "var(--accent)" }}>· {MONTHS_LONG[currentMonth]} {year}</span>
         </h2>
         <div
           className="text-[11.5px] px-2.5 py-1 rounded-full"
-          style={{
-            fontFamily: "var(--font-display)",
-            color: "var(--text-secondary)",
-            background: "var(--card-elevated)",
-            border: "1px solid var(--border)",
-          }}
+          style={{ fontFamily: "var(--font-display)", color: "var(--text-secondary)", background: "var(--card-elevated)", border: "1px solid var(--border)" }}
         >
           Current streak: <b style={{ color: "var(--accent)", fontWeight: 600 }}>{studyDays} days</b>
         </div>
       </div>
 
       <div ref={containerRef} className="overflow-hidden">
-        <div
-          ref={contentRef}
-          style={{
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            height: scale < 1 ? `${160 * scale}px` : undefined,
-          }}
-        >
+        <div ref={contentRef} style={{ transform: `scale(${scale})`, transformOrigin: "top left", height: scale < 1 ? `${160 * scale}px` : undefined }}>
           <div className="flex gap-3">
             {months.map((m) => (
               <ActivityHeatmapMonth
@@ -124,20 +106,8 @@ export default function Heatmap({ refreshKey }: Props) {
                 year={year}
                 cellStyle={{ borderRadius: "0.2rem" }}
                 monthNameStyle={{ fontWeight: "600", fontSize: "0.7rem", color: "var(--text-tertiary)", fontFamily: "var(--font-display)" }}
-                tooltipStyle={{
-                  border: "1px solid var(--border-strong)",
-                  background: "var(--card-elevated)",
-                  color: "var(--text-primary)",
-                  fontSize: "0.75rem",
-                  fontFamily: "var(--font-body)",
-                }}
-                customCellColors={{
-                  level0: "var(--heatmap-0)",
-                  level1: "var(--heatmap-1)",
-                  level2: "var(--heatmap-2)",
-                  level3: "var(--heatmap-3)",
-                  level4: "var(--heatmap-4)",
-                }}
+                tooltipStyle={{ border: "1px solid var(--border-strong)", background: "var(--card-elevated)", color: "var(--text-primary)", fontSize: "0.75rem", fontFamily: "var(--font-body)" }}
+                customCellColors={{ level0: "var(--heatmap-0)", level1: "var(--heatmap-1)", level2: "var(--heatmap-2)", level3: "var(--heatmap-3)", level4: "var(--heatmap-4)" }}
                 monthNameFormat="short"
               />
             ))}
@@ -145,10 +115,7 @@ export default function Heatmap({ refreshKey }: Props) {
         </div>
       </div>
 
-      <div
-        className="flex items-center gap-2 mt-3 text-xs"
-        style={{ fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}
-      >
+      <div className="flex items-center gap-2 mt-3 text-xs" style={{ fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}>
         Less
         <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-0)" }} />
         <span className="w-[11px] h-[11px] rounded-sm" style={{ background: "var(--heatmap-1)" }} />
