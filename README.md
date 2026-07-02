@@ -1,25 +1,81 @@
+<div align="center">
+
 # System Design Tracker
 
-I used to grind LeetCode. Hated it at first. What kept me going was the numbers — watching my submission count climb, seeing the heatmap fill up green, knowing I hadn't broken the streak. That feedback loop turned a chore into something I actually wanted to do every day.
+A study log and streak tracker for system design prep — the LeetCode heatmap, for the part of interview prep that doesn't have one.
 
-System design was different. There's no built-in tracker, no submission counter, no green squares. You read a chapter, watch a video, sketch an architecture — and then it's gone. No record. No momentum. I'd study for a week, take a few days off, and forget where I left up.
+![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
+![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat&logo=firebase&logoColor=black)
+![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000?style=flat&logo=vercel&logoColor=white)
 
-So I built this.
+[Live Demo](https://swe-leet.vercel.app) 
 
-## What it does
+</div>
 
-You log what you studied and where you learned it. That's it. The app does the rest:
+<!-- Screenshot: drop a real one in /docs and swap the src below before publishing -->
+<p align="center">
+  <img src="./public/homepage-screenshot.png" alt="System Design Tracker dashboard" width="800">
+</p>
 
-- **Heatmap** — a year of green squares staring back at you, daring you to break the chain
-- **Weekly progress** — bar chart showing how many sessions you've logged this week, Mon–Sun
-- **Stats** — total entries, study days, unique topics. Three numbers that only go up
-- **Follow friends** — search by username, see their heatmap, keep each other honest
+---
 
-## The stack
+## Table of Contents
 
-Next.js, Tailwind, Firebase Auth, Firestore. No backend server, no Docker, no Redis. Just a frontend that talks to Firebase and a Vercel deploy that costs nothing.
+- [Why](#why)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Data Model](#data-model)
+- [Running It Yourself](#running-it-yourself)
+- [Roadmap](#roadmap)
+- [License](#license)
 
-## Getting started
+## Why
+
+LeetCode's submission heatmap is the reason I was consistent at Data Structure and Algorithms. After the initial friction wore off, the streak itself became the motivation. System design prep has no equivalent: you read a chapter or sketch an architecture, and there's no tangible record it happened. I'd study hard for a week, take a few days off, and lose track of what I'd already covered. 
+
+This app applies the same feedback loop: log a session, watch the heatmap fill in, and the entry log count pile up.
+
+## Features
+
+| Feature | Description |
+|---|---|
+| **Activity heatmap** | Year-view of study activity, GitHub-contributions style |
+| **Weekly progress** | Per-day session counts, Mon–Sun, against a weekly goal |
+| **Stats** | Total entries, study days, unique topics covered |
+| **Social** | Search by username, follow others, view their heatmap |
+
+## Tech Stack
+
+- **Framework:** Next.js
+- **Styling:** Tailwind CSS
+- **Auth & Database:** Firebase Authentication, Firestore
+- **Hosting:** Vercel
+
+No custom backend —> the frontend talks to Firebase directly.
+
+## Data Model
+
+```mermaid
+flowchart LR
+  U["users/{uid}"] -->|1:N| E["entries/{id}"]
+  U --> UN["usernames/{username}"]
+  U -->|writes| FG["following/{uid}/*"]
+  U -->|written to on follow| FL["followers/{uid}/*"]
+```
+
+`entries` are queried per-user, ordered by `createdAt`, and aggregated client-side into the heatmap and weekly chart.
+
+## Running It Yourself
+
+<details>
+<summary><strong>Local setup, Firebase config, and deployment</strong> (click to expand)</summary>
+
+### Prerequisites
+
+Node 18+, a Firebase project.
+
+### Install
 
 ```bash
 git clone https://github.com/kaushik-3009/swe-leet.git
@@ -27,7 +83,7 @@ cd swe-leet
 npm install
 ```
 
-Create a `.env.local` file with your Firebase config:
+Create `.env.local`:
 
 ```
 NEXT_PUBLIC_FIREBASE_API_KEY=...
@@ -38,19 +94,17 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
 ```
 
-Then:
-
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Create an account. Start logging.
+Open [http://localhost:3000](http://localhost:3000), create an account, start logging.
 
-## Firebase setup
+### Firebase Setup
 
 1. [Create a Firebase project](https://console.firebase.google.com)
 2. Enable **Authentication** → Email/Password
-3. Create a **Firestore Database** (start in test mode)
+3. Create a **Firestore Database** (test mode is fine to start)
 4. Add a **Web App** and copy the config into `.env.local`
 5. Deploy these Firestore rules:
 
@@ -82,16 +136,26 @@ service cloud.firestore {
 }
 ```
 
-6. Create a composite index on `entries` — fields: `userId` (ASC) + `createdAt` (DESC). The app will give you a direct link if it's missing.
+> **Privacy note:** `users`, `usernames`, and `entries` are readable by anyone with a Firestore client, not just through the app UI — this is what makes the follow/heatmap feature work without a backend. It also means entry content (topic + resource text, not just the heatmap) is public for every account. To make logs private-by-default with an opt-in public heatmap, split entry metadata (date + count, for the heatmap) from entry content (topic/resource) into separate documents with separate read rules.
 
-## Demo data
+6. Create a composite index on `entries`: `userId` (ASC) + `createdAt` (DESC). The app links directly to the index-creation page if Firestore reports it's missing.
 
-Visit `/seed` after deploying to create 5 demo users with 60 days of study data each. Good for testing the search and follow features.
+### Demo Data
 
-## Deploy
+Visit `/seed` after deploying to create 5 demo users with 60 days of study history each — useful for testing search and follow without manually creating accounts.
 
-Push to GitHub. Connect the repo on [vercel.com](https://vercel.com). Add the Firebase env vars. Deploy.
+### Deployment
 
-## Why this exists
+Push to GitHub, import the repo on [Vercel](https://vercel.com), add the Firebase env vars, deploy.
 
-The best study tool is the one you actually use. LeetCode taught me that a heatmap and a number going up is enough to build a habit. This is the same idea, for system design.
+</details>
+
+## Roadmap
+
+- [ ] Editable/deletable entries from the dashboard
+- [ ] Per-user weekly goal configuration
+- [ ] Export study history as CSV
+
+## License
+
+MIT — see [`LICENSE`](./LICENSE).
