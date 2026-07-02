@@ -1,36 +1,97 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# System Design Tracker
 
-## Getting Started
+I used to grind LeetCode. Hated it at first. What kept me going was the numbers — watching my submission count climb, seeing the heatmap fill up green, knowing I hadn't broken the streak. That feedback loop turned a chore into something I actually wanted to do every day.
 
-First, run the development server:
+System design was different. There's no built-in tracker, no submission counter, no green squares. You read a chapter, watch a video, sketch an architecture — and then it's gone. No record. No momentum. I'd study for a week, take a few days off, and forget where I left up.
+
+So I built this.
+
+## What it does
+
+You log what you studied and where you learned it. That's it. The app does the rest:
+
+- **Heatmap** — a year of green squares staring back at you, daring you to break the chain
+- **Weekly progress** — bar chart showing how many sessions you've logged this week, Mon–Sun
+- **Stats** — total entries, study days, unique topics. Three numbers that only go up
+- **Follow friends** — search by username, see their heatmap, keep each other honest
+
+## The stack
+
+Next.js, Tailwind, Firebase Auth, Firestore. No backend server, no Docker, no Redis. Just a frontend that talks to Firebase and a Vercel deploy that costs nothing.
+
+## Getting started
+
+```bash
+git clone https://github.com/kaushik-3009/swe-leet.git
+cd swe-leet
+npm install
+```
+
+Create a `.env.local` file with your Firebase config:
+
+```
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+```
+
+Then:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). Create an account. Start logging.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Firebase setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. [Create a Firebase project](https://console.firebase.google.com)
+2. Enable **Authentication** → Email/Password
+3. Create a **Firestore Database** (start in test mode)
+4. Add a **Web App** and copy the config into `.env.local`
+5. Deploy these Firestore rules:
 
-## Learn More
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /usernames/{username} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /entries/{id} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /following/{uid}/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == uid;
+    }
+    match /followers/{uid}/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if true;
+    }
+  }
+}
+```
 
-To learn more about Next.js, take a look at the following resources:
+6. Create a composite index on `entries` — fields: `userId` (ASC) + `createdAt` (DESC). The app will give you a direct link if it's missing.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Demo data
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Visit `/seed` after deploying to create 5 demo users with 60 days of study data each. Good for testing the search and follow features.
 
-## Deploy on Vercel
+## Deploy
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Push to GitHub. Connect the repo on [vercel.com](https://vercel.com). Add the Firebase env vars. Deploy.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Why this exists
+
+The best study tool is the one you actually use. LeetCode taught me that a heatmap and a number going up is enough to build a habit. This is the same idea, for system design.
