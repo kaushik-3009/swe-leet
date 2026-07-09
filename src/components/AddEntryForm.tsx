@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { addEntry as addEntryFirestore, getUserEntries } from "@/lib/firestore";
+import { api } from "@/lib/api";
+import type { StudyEntry } from "@/lib/types";
 import WeeklyProgress from "./WeeklyProgress";
 
 interface Props {
@@ -18,7 +19,7 @@ export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
 
   useEffect(() => {
     async function load() {
-      const entries = await getUserEntries(userId);
+      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
       setExistingTopics([...new Set(entries.map((e) => e.topic))].sort());
     }
     load();
@@ -31,11 +32,11 @@ export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!topic.trim() || !resource.trim()) return;
-    await addEntryFirestore(userId, topic, resource);
+    await api.post("/api/entries", { topic, resource });
     setTopic("");
     setResource("");
     setShowSuggestions(false);
-    const entries = await getUserEntries(userId);
+    const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
     setExistingTopics([...new Set(entries.map((e) => e.topic))].sort());
     onAdded();
   }

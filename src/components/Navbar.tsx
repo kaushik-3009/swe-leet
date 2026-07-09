@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import { useTheme } from "@/components/ThemeProvider";
-import { searchUsers } from "@/lib/firestore";
-import type { UserProfile } from "@/lib/firestore";
+import { api } from "@/lib/api";
+import type { UserProfile } from "@/lib/types";
 import { useRouter } from "next/navigation";
 
 export default function Navbar() {
@@ -24,9 +24,9 @@ export default function Navbar() {
     }
     const timer = setTimeout(async () => {
       try {
-        const users = await searchUsers(searchQuery, user.uid);
+        const users = await api.get<UserProfile[]>(`/api/users/search?q=${encodeURIComponent(searchQuery)}`);
         setResults(users);
-      } catch (err) {
+      } catch {
         setResults([]);
       }
     }, 300);
@@ -65,6 +65,16 @@ export default function Navbar() {
             style={{ background: "var(--accent)", boxShadow: "0 0 8px var(--accent-glow)" }}
           />
           <span className="text-sm font-semibold hidden sm:inline">SD Tracker</span>
+        </Link>
+
+        <Link
+          href="/roadmap"
+          className="text-sm font-medium shrink-0 hidden md:inline transition-colors"
+          style={{ color: "var(--text-secondary)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+        >
+          Roadmap
         </Link>
 
         <div className="flex-1 max-w-sm relative" ref={searchRef}>

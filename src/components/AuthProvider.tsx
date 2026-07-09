@@ -9,16 +9,9 @@ import {
   updateProfile,
   User,
 } from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
-import { auth as getAuth, db as getDb } from "@/lib/firebase";
-
-interface UserProfile {
-  uid: string;
-  username: string;
-  displayName: string;
-  email: string;
-  createdAt: any;
-}
+import { auth as getAuth } from "@/lib/firebase";
+import { api, ApiError } from "@/lib/api";
+import type { UserProfile } from "@/lib/types";
 
 interface AuthContextType {
   user: User | null;
@@ -54,12 +47,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     const unsubscribe = onAuthStateChanged(firebaseAuth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        const db = getDb();
-        if (db) {
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (userDoc.exists()) {
-            setProfile(userDoc.data() as UserProfile);
-          }
+        try {
+          const p = await api.get<UserProfile>("/api/users/me");
+          setProfile(p);
+        } catch {
+          setProfile(null);
         }
       } else {
         setProfile(null);
@@ -71,30 +63,20 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
   async function signup(email: string, password: string, username: string) {
     const firebaseAuth = getAuth();
-    const db = getDb();
-    if (!firebaseAuth || !db) throw new Error("Firebase not initialized");
-
-    // Check username uniqueness
-    const usernameQuery = query(collection(db, "users"), where("username", "==", username.toLowerCase().trim()));
-    const usernameSnapshot = await getDocs(usernameQuery);
-    if (!usernameSnapshot.empty) {
-      throw new Error("Username is already taken");
-    }
+    if (!firebaseAuth) throw new Error("Firebase not initialized");
 
     const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
     await updateProfile(cred.user, { displayName: username });
 
-    const userProfile: UserProfile = {
-      uid: cred.user.uid,
-      username: username.toLowerCase().trim(),
-      displayName: username.trim(),
-      email: email.toLowerCase().trim(),
-      createdAt: serverTimestamp(),
-    };
-
-    await setDoc(doc(db, "users", cred.user.uid), userProfile);
-    await setDoc(doc(db, "usernames", username.toLowerCase().trim()), { uid: cred.user.uid });
-    setProfile(userProfile);
+    try {
+      const p = await api.post<UserProfile>("/api/users/register", { username });
+      setProfile(p);
+    } catch (e) {
+      // Roll back the Firebase account so the user isn't left in a half-signed-up state
+      // (e.g. username already taken in Postgres).
+      await cred.user.delete().catch(() => {});
+      throw e instanceof ApiError ? new Error(e.message) : e;
+    }
   }
 
   async function login(email: string, password: string) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { seedDemoUsers } from "@/lib/firestore";
+import { api } from "@/lib/api";
 
 export default function SeedPage() {
   const [status, setStatus] = useState<"idle" | "seeding" | "done" | "error">("idle");
@@ -11,11 +11,12 @@ export default function SeedPage() {
     setStatus("seeding");
     setLog(["Starting demo user seeding..."]);
     try {
-      await seedDemoUsers();
+      await api.post("/api/demo/seed");
       setLog((prev) => [...prev, "Done! 5 demo users created with 60 days of data each."]);
       setStatus("done");
-    } catch (e: any) {
-      setLog((prev) => [...prev, `Error: ${e.message}`]);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Unknown error";
+      setLog((prev) => [...prev, `Error: ${message}`]);
       setStatus("error");
     }
   }

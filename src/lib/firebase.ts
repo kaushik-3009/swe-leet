@@ -1,7 +1,8 @@
 import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
 
+// Firebase is used for authentication only — all data lives in Postgres (see src/lib/db.ts
+// and src/app/api/**). See docs/DECISIONS.md for the migration rationale.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -13,7 +14,6 @@ const firebaseConfig = {
 
 let app: FirebaseApp | undefined;
 let auth: Auth | undefined;
-let db: Firestore | undefined;
 
 function getFirebaseApp() {
   if (typeof window === "undefined") return undefined;
@@ -31,12 +31,4 @@ function getFirebaseAuth() {
   return auth;
 }
 
-function getFirebaseDb() {
-  if (!db) {
-    const a = getFirebaseApp();
-    if (a) db = getFirestore(a);
-  }
-  return db;
-}
-
-export { getFirebaseApp as app, getFirebaseAuth as auth, getFirebaseDb as db };
+export { getFirebaseApp as app, getFirebaseAuth as auth };

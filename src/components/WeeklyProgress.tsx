@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getUserEntries } from "@/lib/firestore";
+import { api } from "@/lib/api";
+import type { StudyEntry } from "@/lib/types";
 
 interface Props {
   userId: string;
@@ -17,7 +18,7 @@ export default function WeeklyProgress({ userId, refreshKey }: Props) {
 
   useEffect(() => {
     async function load() {
-      const entries = await getUserEntries(userId);
+      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
       const now = new Date();
       const day = now.getDay();
       const mondayOffset = day === 0 ? -6 : 1 - day;

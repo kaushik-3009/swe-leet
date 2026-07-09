@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Core (migrated off Firestore) ─────────────────────────────────────────
+
+model User {
+  id          String   @id // Firebase Auth uid
+  username    String   @unique
+  displayName String
+  email       String
+  createdAt   DateTime @default(now())
+
+  entries         StudyEntry[]
+  progress        ProblemProgress[]
+  submissions     Submission[]
+  reviews         Review[]
+  following       Follow[]           @relation("Follower")
+  followers       Follow[]           @relation("Following")
+
+  @@index([username])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+}
+
+enum EntryKind {
+  manual
+  problem_attempt
+  problem_solved
+}
+
+model StudyEntry {
+  id        String    @id @default(cuid())
+  userId    String
+  topic     String
+  resource  String
+  date      String // YYYY-MM-DD, matches legacy Firestore shape
+  createdAt DateTime  @default(now())
+  kind      EntryKind @default(manual)
+  problemId String?
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem? @relation(fields: [problemId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, date])
+}
+
+// ─── Curated roadmap content ───────────────────────────────────────────────
+
+enum Track {
+  SYSTEM_DESIGN
+  LLD
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  track       Track
+  slug        String   @unique
+  title       String
+  description String
+  order       Int
+
+  problems Problem[]
+
+  @@index([track, order])
+}
+
+model Problem {
+  id                   String     @id @default(cuid())
+  track                Track
+  categoryId           String
+  slug                 String     @unique
+  title                String
+  description          String // markdown: requirements/prompt
+  difficulty           Difficulty
+  tags                 String[]
+  estMinutes           Int
+  order                Int
+  referenceExplanation String // markdown
+  referenceDiagram     Json // tldraw snapshot
+  rubric               Json // { requiredComponents: string[], requiredConnections: {from:string,to:string}[], weights?: Record<string, number> }
+
+  category    Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  progress    ProblemProgress[]
+  submissions Submission[]
+  reviews     Review[]
+  entries     StudyEntry[]
+
+  @@index([track, categoryId, order])
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SOLVED
+}
+
+model ProblemProgress {
+  userId    String
+  problemId String
+  status    ProgressStatus @default(NOT_STARTED)
+  bestScore Int            @default(0)
+  updatedAt DateTime       @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@id([userId, problemId])
+  @@index([userId])
+}
+
+model Submission {
+  id               String   @id @default(cuid())
+  userId           String
+  problemId        String
+  version          Int
+  canvasSnapshot   Json
+  score            Int
+  feedback         Json // { strengths: string[], missing: string[], improvements: string[] }
+  structuralResult Json // { matchedComponents, missingComponents, matchedConnections, missingConnections, coverage }
+  createdAt        DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, problemId, version])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  problemId String
+  userId    String
+  rating    Int
+  body      String
+  createdAt DateTime @default(now())
+
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([problemId, createdAt])
+}

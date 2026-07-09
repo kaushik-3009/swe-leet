@@ -9,7 +9,7 @@ import Stats from "@/components/Stats";
 import Heatmap from "@/components/Heatmap";
 import AddEntryForm from "@/components/AddEntryForm";
 import EntryList from "@/components/EntryList";
-import { seedDemoDataFirestore, clearAllEntriesFirestore, seedDemoUsers } from "@/lib/firestore";
+import { api } from "@/lib/api";
 
 export default function Home() {
   const { user, profile, loading } = useAuth();
@@ -24,8 +24,7 @@ export default function Home() {
   async function handleSeedDemo() {
     if (!user) return;
     setSeeding(true);
-    await seedDemoUsers();
-    await seedDemoDataFirestore(user.uid);
+    await api.post("/api/demo/seed");
     setSeeding(false);
     handleRefresh();
   }
@@ -33,7 +32,7 @@ export default function Home() {
   async function handleClear() {
     if (!user) return;
     setClearing(true);
-    await clearAllEntriesFirestore(user.uid);
+    await api.post("/api/demo/clear");
     setClearing(false);
     handleRefresh();
   }

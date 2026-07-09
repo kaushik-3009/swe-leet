@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { getUserEntries, deleteEntry } from "@/lib/firestore";
-import type { StudyEntry } from "@/lib/firestore";
+import { api } from "@/lib/api";
+import type { StudyEntry } from "@/lib/types";
 
 interface Props {
   refreshKey: number;
@@ -23,7 +23,7 @@ export default function EntryList({
 
   useEffect(() => {
     async function load() {
-      const e = await getUserEntries(userId);
+      const e = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
       setEntries(e);
       setMounted(true);
     }
@@ -31,8 +31,8 @@ export default function EntryList({
   }, [refreshKey, userId]);
 
   async function handleDelete(id: string) {
-    await deleteEntry(id);
-    const e = await getUserEntries(userId);
+    await api.delete(`/api/entries/${id}`);
+    const e = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
     setEntries(e);
   }
 

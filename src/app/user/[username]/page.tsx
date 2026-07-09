@@ -4,19 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import Navbar from "@/components/Navbar";
-import {
-  getUserByUsername,
-  getUserEntries,
-  getHeatmapDataFromEntries,
-  isFollowing,
-  followUser,
-  unfollowUser,
-  getFollowerCount,
-  getFollowingCount,
-  getFollowers,
-  getFollowing,
-} from "@/lib/firestore";
-import type { UserProfile, StudyEntry } from "@/lib/firestore";
+import { api } from "@/lib/api";
+import type { UserProfile, StudyEntry, CategoryWithProgress, SolvedProblemSummary } from "@/lib/types";
+import Link from "next/link";
 import { ActivityHeatmapMonth } from "react-activity-heatmap";
 import type { HeatmapActivity } from "react-activity-heatmap";
 
@@ -49,6 +39,8 @@ export default function UserProfilePage() {
   const [activities, setActivities] = useState<HeatmapActivity[]>([]);
   const [showModal, setShowModal] = useState<"followers" | "following" | null>(null);
   const [modalUsers, setModalUsers] = useState<UserProfile[]>([]);
+  const [roadmapCategories, setRoadmapCategories] = useState<CategoryWithProgress[]>([]);
+  const [solvedProblems, setSolvedProblems] = useState<SolvedProblemSummary[]>([]);
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -59,18 +51,19 @@ export default function UserProfilePage() {
     async function load() {
       try {
         setLoading(true);
-        const profile = await getUserByUsername(username);
+        const profile = await api.get<UserProfile | null>(`/api/users/${username}`).catch(() => null);
         if (!profile) { setLoading(false); return; }
         setViewedProfile(profile);
 
-        const userEntries = await getUserEntries(profile.uid);
+        const userEntries = await api.get<StudyEntry[]>(`/api/entries?userId=${profile.uid}`);
         setEntries(userEntries);
 
         const topics = [...new Set(userEntries.map((e) => e.topic))];
         const days = new Set(userEntries.map((e) => e.date)).size;
         setStats({ totalEntries: userEntries.length, uniqueTopics: topics.length, studyDays: days });
 
-        const heatmapData = getHeatmapDataFromEntries(userEntries);
+        const heatmapData: Record<string, number> = {};
+        for (const e of userEntries) heatmapData[e.date] = (heatmapData[e.date] || 0) + 1;
         const acts: HeatmapActivity[] = Object.entries(heatmapData).map(([date, count]) => ({
           date: new Date(date + "T12:00:00"),
           count,
@@ -79,17 +72,29 @@ export default function UserProfilePage() {
         setActivities(acts);
 
         try {
-          const fc = await getFollowerCount(profile.uid);
-          const flc = await getFollowingCount(profile.uid);
-          setFollowerCount(fc);
-          setFollowingCount(flc);
+          const counts = await api.get<{ followers: number; following: number }>(`/api/follow/counts?userId=${profile.uid}`);
+          setFollowerCount(counts.followers);
+          setFollowingCount(counts.following);
         } catch (e) {
           console.error("Failed to load follow counts:", e);
         }
 
+        try {
+          // Roadmap structure is shared; per-user solved status comes from /api/progress
+          // (public, keyed by the *viewed* profile's uid — not the logged-in viewer's).
+          const [roadmap, solved] = await Promise.all([
+            api.get<CategoryWithProgress[]>(`/api/roadmap`),
+            api.get<SolvedProblemSummary[]>(`/api/progress?userId=${profile.uid}`),
+          ]);
+          setRoadmapCategories(roadmap);
+          setSolvedProblems(solved);
+        } catch (e) {
+          console.error("Failed to load roadmap progress:", e);
+        }
+
         if (user && !isOwnProfile) {
           try {
-            const f = await isFollowing(user.uid, profile.uid);
+            const { following: f } = await api.get<{ following: boolean }>(`/api/follow/status?targetUid=${profile.uid}`);
             setFollowing(f);
           } catch (e) {
             console.error("Failed to check following:", e);
@@ -122,7 +127,7 @@ export default function UserProfilePage() {
   async function handleFollow() {
     if (!user || !viewedProfile) return;
     try {
-      await followUser(user.uid, viewedProfile.uid);
+      await api.post("/api/follow", { targetUid: viewedProfile.uid });
       setFollowing(true);
       setFollowerCount((c) => c + 1);
     } catch (e) {
@@ -133,7 +138,7 @@ export default function UserProfilePage() {
   async function handleUnfollow() {
     if (!user || !viewedProfile) return;
     try {
-      await unfollowUser(user.uid, viewedProfile.uid);
+      await api.delete("/api/follow", { targetUid: viewedProfile.uid });
       setFollowing(false);
       setFollowerCount((c) => c - 1);
     } catch (e) {
@@ -144,7 +149,7 @@ export default function UserProfilePage() {
   async function openFollowers() {
     if (!viewedProfile) return;
     try {
-      const list = await getFollowers(viewedProfile.uid);
+      const list = await api.get<UserProfile[]>(`/api/follow/followers?userId=${viewedProfile.uid}`);
       setModalUsers(list);
       setShowModal("followers");
     } catch (e) {
@@ -155,7 +160,7 @@ export default function UserProfilePage() {
   async function openFollowing() {
     if (!viewedProfile) return;
     try {
-      const list = await getFollowing(viewedProfile.uid);
+      const list = await api.get<UserProfile[]>(`/api/follow/following?userId=${viewedProfile.uid}`);
       setModalUsers(list);
       setShowModal("following");
     } catch (e) {
@@ -304,6 +309,51 @@ export default function UserProfilePage() {
               </div>
             )}
           </div>
+
+          {solvedProblems.length > 0 && (
+            <div className="rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)", padding: "24px", boxShadow: "var(--shadow-sm)" }}>
+              <h2 className="text-base font-semibold mb-5 flex items-center gap-2" style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
+                <span style={{ color: "var(--accent)" }}>·</span> Roadmap Progress
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                {roadmapCategories
+                  .map((cat) => {
+                    const solvedIds = new Set(solvedProblems.filter((s) => s.status === "SOLVED").map((s) => s.problemId));
+                    const solvedCount = cat.problems.filter((p) => solvedIds.has(p.id)).length;
+                    const pct = cat.problems.length === 0 ? 0 : Math.round((solvedCount / cat.problems.length) * 100);
+                    return { ...cat, viewerPct: pct, solvedCount };
+                  })
+                  .filter((cat) => cat.problems.length > 0)
+                  .map((cat) => (
+                    <div key={cat.id} className="rounded-lg px-3.5 py-3" style={{ background: "var(--card-elevated)", border: "1px solid var(--border)" }}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{cat.title}</span>
+                        <span className="text-xs" style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>{cat.viewerPct}%</span>
+                      </div>
+                      <div className="h-[5px] rounded-full overflow-hidden" style={{ background: "var(--bg)", border: "1px solid var(--border)" }}>
+                        <div className="h-full rounded-full" style={{ width: `${cat.viewerPct}%`, background: "linear-gradient(90deg, #157a5c, var(--accent))" }} />
+                      </div>
+                    </div>
+                  ))}
+              </div>
+
+              <h3 className="text-[11px] tracking-wider uppercase mb-3 font-medium" style={{ fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}>
+                Solved Problems
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {solvedProblems.filter((s) => s.status === "SOLVED").map((s) => (
+                  <Link
+                    key={s.problemId}
+                    href={`/practice/${s.slug}`}
+                    className="text-xs px-2.5 py-1.5 rounded-full transition-colors"
+                    style={{ fontFamily: "var(--font-display)", color: "var(--accent)", background: "var(--accent-dim)", border: "1px solid var(--accent-dim-border)" }}
+                  >
+                    {s.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

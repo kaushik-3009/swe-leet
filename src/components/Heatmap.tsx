@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityHeatmapMonth } from "react-activity-heatmap";
 import type { HeatmapActivity } from "react-activity-heatmap";
-import { getUserEntries, getHeatmapDataFromEntries } from "@/lib/firestore";
+import { api } from "@/lib/api";
+import type { StudyEntry } from "@/lib/types";
 
 function getLevel(count: number): number {
   if (count === 0) return 0;
@@ -33,8 +34,9 @@ export default function Heatmap({ refreshKey, userId }: Props) {
 
   useEffect(() => {
     async function load() {
-      const entries = await getUserEntries(userId);
-      const data = getHeatmapDataFromEntries(entries);
+      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
+      const data: Record<string, number> = {};
+      for (const e of entries) data[e.date] = (data[e.date] || 0) + 1;
       const result: HeatmapActivity[] = Object.entries(data).map(([date, count]) => ({
         date: new Date(date + "T12:00:00"),
         count,
