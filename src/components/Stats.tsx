@@ -1,39 +1,10 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
-import type { StudyEntry } from "@/lib/types";
+import type { DashboardStats } from "@/lib/types";
 
 interface Props {
-  refreshKey: number;
-  userId: string;
+  stats: DashboardStats;
 }
 
-export default function Stats({ refreshKey, userId }: Props) {
-  const [stats, setStats] = useState({ totalEntries: 0, studyDays: 0, uniqueTopics: 0 });
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    async function load() {
-      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-      const topics = new Set(entries.map((e) => e.topic));
-      const days = new Set(entries.map((e) => e.date));
-      setStats({ totalEntries: entries.length, studyDays: days.size, uniqueTopics: topics.size });
-      setMounted(true);
-    }
-    load();
-  }, [refreshKey, userId]);
-
-  if (!mounted) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="rounded-xl h-32 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
-        ))}
-      </div>
-    );
-  }
-
+export default function Stats({ stats }: Props) {
   const cards = [
     {
       label: "Total Entries",

@@ -2,20 +2,23 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
-import type { TLStoreSnapshot } from "tldraw";
+import type { TLStoreSnapshot, Editor } from "tldraw";
 import { useAuth } from "@/components/AuthProvider";
 import Navbar from "@/components/Navbar";
 import Markdown from "@/components/Markdown";
 import SolutionPanel from "@/components/SolutionPanel";
 import DesignCanvas from "@/components/canvas/DesignCanvas";
+import ArchitectureShapePalette from "@/components/canvas/ArchitectureShapePalette";
 import { api, ApiError } from "@/lib/api";
-import type { ProblemDetail, Submission, ProblemSolution } from "@/lib/types";
+import type { ProblemDetail, Submission, CodeSubmission, ProblemSolution, SubmissionFeedback } from "@/lib/types";
 
 const DIFFICULTY_COLOR: Record<string, string> = {
   EASY: "var(--stat-teal)",
   MEDIUM: "var(--stat-amber)",
   HARD: "var(--danger)",
 };
+
+type Mode = "canvas" | "code";
 
 export default function PracticePage() {
   const params = useParams();
@@ -24,20 +27,31 @@ export default function PracticePage() {
   const { user, loading: authLoading } = useAuth();
 
   const [problem, setProblem] = useState<ProblemDetail | null>(null);
+  const [mode, setMode] = useState<Mode>("canvas");
+
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [canvasSnapshot, setCanvasSnapshot] = useState<TLStoreSnapshot | undefined>(undefined);
   const [canvasKey, setCanvasKey] = useState(0);
+  const [editor, setEditor] = useState<Editor | null>(null);
+
+  const [codeSubmissions, setCodeSubmissions] = useState<CodeSubmission[]>([]);
+  const [code, setCode] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [revealing, setRevealing] = useState(false);
   const [error, setError] = useState("");
-  const [lastResult, setLastResult] = useState<Submission | null>(null);
+  const [lastResult, setLastResult] = useState<{ score: number; feedback: SubmissionFeedback } | null>(null);
   const [solution, setSolution] = useState<ProblemSolution | null>(null);
   const [showSolution, setShowSolution] = useState(false);
   const [revealSnapshot, setRevealSnapshot] = useState<TLStoreSnapshot | undefined>(undefined);
+  const [revealCode, setRevealCode] = useState<string | undefined>(undefined);
+  const [hintsOpen, setHintsOpen] = useState(false);
+  const [revealedHints, setRevealedHints] = useState(0);
 
   const touchedRef = useRef(false);
   const latestSnapshotRef = useRef<TLStoreSnapshot | undefined>(undefined);
+  const latestCodeRef = useRef("");
 
   useEffect(() => {
     if (!user) return;
@@ -46,6 +60,11 @@ export default function PracticePage() {
       try {
         const p = await api.get<ProblemDetail>(`/api/problems/${slug}`);
         setProblem(p);
+        if (p.track === "LLD") {
+          setMode("canvas");
+          setCode(`# Write your ${p.title} implementation here.\n`);
+        }
+
         const subs = await api.get<Submission[]>(`/api/submissions?problemId=${p.id}`);
         setSubmissions(subs);
         if (subs.length > 0) {
@@ -54,6 +73,21 @@ export default function PracticePage() {
           latestSnapshotRef.current = newest.canvasSnapshot as TLStoreSnapshot;
           setLastResult(newest);
           touchedRef.current = true;
+        }
+
+        if (p.track === "LLD") {
+          const codeSubs = await api.get<CodeSubmission[]>(`/api/code-submissions?problemId=${p.id}`);
+          setCodeSubmissions(codeSubs);
+          if (codeSubs.length > 0) {
+            const newest = codeSubs[0];
+            setCode(newest.code);
+            latestCodeRef.current = newest.code;
+            if (subs.length === 0 || newest.createdAt > subs[0].createdAt) {
+              setLastResult(newest);
+              setMode("code");
+            }
+            touchedRef.current = true;
+          }
         }
       } catch {
         setProblem(null);
@@ -74,25 +108,57 @@ export default function PracticePage() {
     [problem]
   );
 
+  function handleCodeChange(value: string) {
+    setCode(value);
+    latestCodeRef.current = value;
+    if (!touchedRef.current && problem) {
+      touchedRef.current = true;
+      api.post("/api/progress/touch", { problemId: problem.id }).catch(() => {});
+    }
+  }
+
   async function handleSubmit() {
-    if (!problem || !latestSnapshotRef.current) {
-      setError("Draw something on the canvas before submitting.");
-      return;
-    }
+    if (!problem) return;
     setError("");
-    setSubmitting(true);
-    try {
-      const res = await api.post<{ submission: Submission }>("/api/submissions", {
-        problemId: problem.id,
-        canvasSnapshot: latestSnapshotRef.current,
-      });
-      setLastResult(res.submission);
-      const subs = await api.get<Submission[]>(`/api/submissions?problemId=${problem.id}`);
-      setSubmissions(subs);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Failed to submit. Please try again.");
+
+    if (mode === "canvas") {
+      if (!latestSnapshotRef.current) {
+        setError("Draw something on the canvas before submitting.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await api.post<{ submission: Submission }>("/api/submissions", {
+          problemId: problem.id,
+          canvasSnapshot: latestSnapshotRef.current,
+        });
+        setLastResult(res.submission);
+        const subs = await api.get<Submission[]>(`/api/submissions?problemId=${problem.id}`);
+        setSubmissions(subs);
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : "Failed to submit. Please try again.");
+      }
+      setSubmitting(false);
+    } else {
+      if (!latestCodeRef.current.trim()) {
+        setError("Write some code before submitting.");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        const res = await api.post<{ submission: CodeSubmission }>("/api/code-submissions", {
+          problemId: problem.id,
+          code: latestCodeRef.current,
+          language: problem.solutionCodeLanguage,
+        });
+        setLastResult(res.submission);
+        const subs = await api.get<CodeSubmission[]>(`/api/code-submissions?problemId=${problem.id}`);
+        setCodeSubmissions(subs);
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : "Failed to submit. Please try again.");
+      }
+      setSubmitting(false);
     }
-    setSubmitting(false);
   }
 
   async function handleRevealSolution() {
@@ -107,6 +173,7 @@ export default function PracticePage() {
       const sol = await api.get<ProblemSolution>(`/api/problems/${slug}/solution`);
       setSolution(sol);
       setRevealSnapshot(latestSnapshotRef.current);
+      setRevealCode(latestCodeRef.current);
       setShowSolution(true);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Could not load the solution.");
@@ -115,10 +182,18 @@ export default function PracticePage() {
   }
 
   function handleLoadVersion(sub: Submission) {
+    setMode("canvas");
     setCanvasSnapshot(sub.canvasSnapshot as TLStoreSnapshot);
     latestSnapshotRef.current = sub.canvasSnapshot as TLStoreSnapshot;
     setLastResult(sub);
     setCanvasKey((k) => k + 1);
+  }
+
+  function handleLoadCodeVersion(sub: CodeSubmission) {
+    setMode("code");
+    setCode(sub.code);
+    latestCodeRef.current = sub.code;
+    setLastResult(sub);
   }
 
   if (authLoading || loading) {
@@ -147,10 +222,12 @@ export default function PracticePage() {
     );
   }
 
+  const isLld = problem.track === "LLD";
+
   return (
     <div className="min-h-screen">
       <Navbar />
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-8">
+      <div className="max-w-[1800px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-8">
         <div className="flex items-center gap-2 mb-4 text-xs" style={{ fontFamily: "var(--font-display)" }}>
           <button onClick={() => router.push("/roadmap")} className="cursor-pointer" style={{ color: "var(--text-tertiary)" }}>
             Roadmap
@@ -159,7 +236,7 @@ export default function PracticePage() {
           <span style={{ color: "var(--text-secondary)" }}>{problem.title}</span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5 items-start">
+        <div className="grid grid-cols-1 xl:grid-cols-[400px_1fr] gap-5 items-start">
           <div className="space-y-5">
             <div className="rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)", padding: "24px", boxShadow: "var(--shadow-sm)" }}>
               <div className="flex items-center gap-2 mb-3">
@@ -182,9 +259,84 @@ export default function PracticePage() {
                   </span>
                 ))}
               </div>
+              {problem.videoUrl && (
+                <a
+                  href={problem.videoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 mt-4 text-[13px] font-medium hover:underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  Watch a walkthrough video &rarr;
+                </a>
+              )}
             </div>
 
-            {submissions.length > 0 && (
+            {(problem.generalHint || problem.stepHints.length > 0) && (
+              <div className="rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)", padding: "20px", boxShadow: "var(--shadow-sm)" }}>
+                <button onClick={() => setHintsOpen((v) => !v)} className="w-full flex items-center justify-between cursor-pointer">
+                  <h2 className="text-[13px] font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
+                    Hints
+                  </h2>
+                  <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>{hintsOpen ? "Hide" : "Show"}</span>
+                </button>
+                {hintsOpen && (
+                  <div className="mt-3.5 space-y-3">
+                    {problem.generalHint && (
+                      <p className="text-[13px]" style={{ color: "var(--text-secondary)" }}>{problem.generalHint}</p>
+                    )}
+                    {problem.stepHints.slice(0, revealedHints).map((h, i) => (
+                      <div key={i} className="text-[13px] px-3 py-2 rounded-lg" style={{ background: "var(--card-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                        <span className="font-semibold" style={{ color: "var(--accent)" }}>Hint {i + 1}:</span> {h}
+                      </div>
+                    ))}
+                    {revealedHints < problem.stepHints.length && (
+                      <button
+                        onClick={() => setRevealedHints((n) => n + 1)}
+                        className="text-[12.5px] font-semibold cursor-pointer"
+                        style={{ color: "var(--accent)" }}
+                      >
+                        Reveal hint {revealedHints + 1} of {problem.stepHints.length} &rarr;
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isLld && (submissions.length > 0 || codeSubmissions.length > 0) && (
+              <div className="rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)", padding: "20px", boxShadow: "var(--shadow-sm)" }}>
+                <h2 className="text-[13px] font-semibold mb-3" style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
+                  Your Attempts
+                </h2>
+                <div className="space-y-1.5">
+                  {submissions.map((s) => (
+                    <button
+                      key={`canvas-${s.id}`}
+                      onClick={() => handleLoadVersion(s)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors"
+                      style={{ background: mode === "canvas" && lastResult === s ? "var(--accent-dim)" : "var(--card-elevated)", border: "1px solid var(--border)" }}
+                    >
+                      <span style={{ color: "var(--text-secondary)" }}>Canvas v{s.version}</span>
+                      <span style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>{s.score}%</span>
+                    </button>
+                  ))}
+                  {codeSubmissions.map((s) => (
+                    <button
+                      key={`code-${s.id}`}
+                      onClick={() => handleLoadCodeVersion(s)}
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors"
+                      style={{ background: mode === "code" && lastResult === s ? "var(--accent-dim)" : "var(--card-elevated)", border: "1px solid var(--border)" }}
+                    >
+                      <span style={{ color: "var(--text-secondary)" }}>Code v{s.version}</span>
+                      <span style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>{s.score}%</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!isLld && submissions.length > 0 && (
               <div className="rounded-xl" style={{ background: "var(--card)", border: "1px solid var(--border)", padding: "20px", boxShadow: "var(--shadow-sm)" }}>
                 <h2 className="text-[13px] font-semibold mb-3" style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>
                   Your Attempts
@@ -195,7 +347,7 @@ export default function PracticePage() {
                       key={s.id}
                       onClick={() => handleLoadVersion(s)}
                       className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors"
-                      style={{ background: lastResult?.id === s.id ? "var(--accent-dim)" : "var(--card-elevated)", border: `1px solid ${lastResult?.id === s.id ? "var(--accent-dim-border)" : "var(--border)"}` }}
+                      style={{ background: lastResult === s ? "var(--accent-dim)" : "var(--card-elevated)", border: "1px solid var(--border)" }}
                     >
                       <span style={{ color: "var(--text-secondary)" }}>Version {s.version}</span>
                       <span style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>{s.score}%</span>
@@ -225,7 +377,54 @@ export default function PracticePage() {
           </div>
 
           <div className="space-y-4">
-            <DesignCanvas key={canvasKey} snapshot={canvasSnapshot} onChange={handleCanvasChange} height="600px" />
+            {isLld && (
+              <div className="flex rounded-lg overflow-hidden w-fit" style={{ border: "1px solid var(--border-strong)" }}>
+                {(["canvas", "code"] as Mode[]).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className="px-4 py-1.5 text-[12.5px] font-semibold cursor-pointer transition-colors"
+                    style={{
+                      fontFamily: "var(--font-body)",
+                      background: mode === m ? "var(--accent)" : "var(--card-elevated)",
+                      color: mode === m ? "var(--bg)" : "var(--text-secondary)",
+                    }}
+                  >
+                    {m === "canvas" ? "Class Diagram" : "Write Code"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {mode === "canvas" ? (
+              <>
+                <ArchitectureShapePalette editor={editor} diagramType={problem.diagramType} />
+                <DesignCanvas
+                  key={canvasKey}
+                  snapshot={canvasSnapshot}
+                  onChange={handleCanvasChange}
+                  onEditorReady={setEditor}
+                  height="min(72vh, 760px)"
+                />
+              </>
+            ) : (
+              <div
+                className="rounded-xl overflow-hidden"
+                style={{ border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
+              >
+                <div className="px-4 py-2 text-[11px] flex items-center justify-between" style={{ background: "var(--card-elevated)", borderBottom: "1px solid var(--border)", fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}>
+                  <span>{problem.solutionCodeLanguage}</span>
+                  <span>Write or paste your implementation</span>
+                </div>
+                <textarea
+                  value={code}
+                  onChange={(e) => handleCodeChange(e.target.value)}
+                  spellCheck={false}
+                  className="w-full outline-none resize-none px-4 py-3 text-[13px] leading-relaxed"
+                  style={{ height: "min(72vh, 760px)", background: "var(--card)", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}
+                />
+              </div>
+            )}
 
             {error && (
               <div className="text-sm rounded-lg px-3.5 py-2.5" style={{ background: "rgba(220,38,38,0.08)", color: "var(--danger)", border: "1px solid rgba(220,38,38,0.2)" }}>
@@ -242,7 +441,7 @@ export default function PracticePage() {
                 onMouseEnter={(e) => { if (!submitting) e.currentTarget.style.boxShadow = "0 0 0 4px var(--accent-dim)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.boxShadow = "none"; }}
               >
-                {submitting ? "Grading..." : "Submit for Grading"}
+                {submitting ? "Grading..." : `Submit ${mode === "code" ? "Code" : "Diagram"} for Grading`}
               </button>
               <button
                 onClick={handleRevealSolution}
@@ -251,8 +450,9 @@ export default function PracticePage() {
                 style={{ fontFamily: "var(--font-body)", background: "var(--card-elevated)", border: "1px solid var(--border-strong)", color: "var(--text-secondary)" }}
                 onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+                title="Reveals the solution step by step, so you can still think it through"
               >
-                {revealing ? "Loading..." : "View Solution"}
+                {revealing ? "Loading..." : "I'm Stuck, Reveal Solution"}
               </button>
             </div>
           </div>
@@ -263,6 +463,7 @@ export default function PracticePage() {
         <SolutionPanel
           problemTitle={problem.title}
           mySnapshot={revealSnapshot}
+          myCode={isLld ? revealCode : undefined}
           solution={solution}
           onClose={() => setShowSolution(false)}
         />

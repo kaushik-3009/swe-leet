@@ -1,59 +1,69 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { api } from "@/lib/api";
-import type { StudyEntry } from "@/lib/types";
+import type { WeeklyGoalProgress } from "@/lib/types";
 
 interface Props {
-  userId: string;
-  refreshKey: number;
+  heatmap: Record<string, number>;
+  goal: WeeklyGoalProgress | null;
+  onGoalChanged: () => void;
 }
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
-const WEEKLY_GOAL = 7;
+const DEFAULT_GOAL = 7;
 
-export default function WeeklyProgress({ userId, refreshKey }: Props) {
-  const [weekData, setWeekData] = useState<(number | null)[]>([null, null, null, null, null, null, null]);
-  const [todayIdx, setTodayIdx] = useState(0);
+function mondayOfThisWeek(): Date {
+  const now = new Date();
+  const day = now.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(now);
+  monday.setHours(0, 0, 0, 0);
+  monday.setDate(monday.getDate() + mondayOffset);
+  return monday;
+}
 
-  useEffect(() => {
-    async function load() {
-      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-      const now = new Date();
-      const day = now.getDay();
-      const mondayOffset = day === 0 ? -6 : 1 - day;
-      const monday = new Date(now);
-      monday.setHours(0, 0, 0, 0);
-      monday.setDate(monday.getDate() + mondayOffset);
+export default function WeeklyProgress({ heatmap, goal, onGoalChanged }: Props) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(goal?.targetSessions ?? DEFAULT_GOAL);
+  const [saving, setSaving] = useState(false);
 
-      const counts: (number | null)[] = [];
-      let total = 0;
+  const now = new Date();
+  const monday = mondayOfThisWeek();
+  const weekData: (number | null)[] = [];
+  let weekTotal = 0;
 
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(monday);
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split("T")[0];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    const dateStr = d.toISOString().split("T")[0];
 
-        if (d > now && d.toDateString() !== now.toDateString()) {
-          counts.push(null);
-        } else {
-          const count = entries.filter((e) => e.date === dateStr).length;
-          counts.push(count);
-          total += count;
-        }
-      }
-
-      const currentDay = now.getDay();
-      setTodayIdx(currentDay === 0 ? 6 : currentDay - 1);
-      setWeekData(counts);
+    if (d > now && d.toDateString() !== now.toDateString()) {
+      weekData.push(null);
+    } else {
+      const count = heatmap[dateStr] ?? 0;
+      weekData.push(count);
+      weekTotal += count;
     }
-    load();
-  }, [userId, refreshKey]);
+  }
 
+  const currentDay = now.getDay();
+  const todayIdx = currentDay === 0 ? 6 : currentDay - 1;
+  const target = goal?.targetSessions ?? DEFAULT_GOAL;
   const activeDays = weekData.filter((c) => c !== null) as number[];
-  const weekTotal = activeDays.reduce((sum, c) => sum + c, 0);
   const maxCount = Math.max(1, ...activeDays);
-  const pct = Math.min(100, Math.round((weekTotal / WEEKLY_GOAL) * 100));
+  const pct = Math.min(100, Math.round((weekTotal / target) * 100));
+
+  async function save() {
+    setSaving(true);
+    try {
+      await api.post("/api/goals", { targetSessions: value });
+      setEditing(false);
+      onGoalChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="mt-6">
@@ -71,12 +81,35 @@ export default function WeeklyProgress({ userId, refreshKey }: Props) {
           <div className="text-[13.5px] font-semibold" style={{ color: "var(--text-primary)" }}>
             Weekly study goal
           </div>
-          <div
-            className="text-xs"
-            style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}
-          >
-            {weekTotal} / {WEEKLY_GOAL} sessions
-          </div>
+          {editing ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={value}
+                onChange={(e) => setValue(Number(e.target.value))}
+                className="w-14 px-1.5 py-1 rounded text-xs"
+                style={{ background: "var(--card)", border: "1px solid var(--border-strong)", color: "var(--text-primary)" }}
+              />
+              <button onClick={save} disabled={saving} className="text-xs font-semibold cursor-pointer" style={{ color: "var(--accent)" }}>
+                {saving ? "..." : "Save"}
+              </button>
+              <button onClick={() => setEditing(false)} className="text-xs cursor-pointer" style={{ color: "var(--text-tertiary)" }}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setValue(target); setEditing(true); }}
+              className="text-xs cursor-pointer flex items-center gap-1.5"
+              style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}
+              title="Edit weekly goal"
+            >
+              {weekTotal} / {target} sessions
+              <span style={{ color: "var(--text-tertiary)" }}>edit</span>
+            </button>
+          )}
         </div>
         <div
           className="h-[7px] rounded-full overflow-hidden mb-4"
@@ -86,7 +119,7 @@ export default function WeeklyProgress({ userId, refreshKey }: Props) {
             className="h-full rounded-full transition-all"
             style={{
               width: `${pct}%`,
-              background: "linear-gradient(90deg, #157a5c, var(--accent))",
+              background: pct >= 100 ? "var(--accent)" : "linear-gradient(90deg, #157a5c, var(--accent))",
             }}
           />
         </div>

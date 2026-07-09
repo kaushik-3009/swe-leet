@@ -18,7 +18,10 @@ export async function POST(req: NextRequest) {
     const uid = await getUidFromRequest(req);
     const { problemId, canvasSnapshot } = bodySchema.parse(await req.json());
 
-    const problem = await prisma.problem.findUnique({ where: { id: problemId } });
+    const problem = await prisma.problem.findUnique({
+      where: { id: problemId },
+      select: { id: true, title: true, description: true, rubric: true, track: true },
+    });
     if (!problem) return err("Problem not found", 404);
 
     const { score, feedback, structuralResult } = await gradeSubmission({
@@ -63,7 +66,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: uid,
         topic: problem.title,
-        resource: `${problem.track === "SYSTEM_DESIGN" ? "System Design" : "LLD"} practice — ${solved ? "solved" : "attempted"} (score ${score})`,
+        resource: `${problem.track === "SYSTEM_DESIGN" ? "System Design" : "LLD"} practice (${solved ? "solved" : "attempted"}, score ${score})`,
         date: new Date().toISOString().split("T")[0],
         kind: solved ? "problem_solved" : "problem_attempt",
         problemId,

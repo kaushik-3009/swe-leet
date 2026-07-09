@@ -3,38 +3,82 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import type { StudyEntry } from "@/lib/types";
+import type { StudyEntry, EntryKind } from "@/lib/types";
+
+const KIND_META: Record<EntryKind, { label: string; color: string; glyph: string }> = {
+  manual: { label: "Logged", color: "var(--stat-blue)", glyph: "✎" },
+  problem_started: { label: "Started", color: "var(--text-tertiary)", glyph: "▷" },
+  problem_attempt: { label: "Attempt", color: "var(--stat-amber)", glyph: "◐" },
+  problem_solved: { label: "Solved", color: "var(--accent)", glyph: "✓" },
+  problem_checklist: { label: "Checked off", color: "var(--stat-blue)", glyph: "☑" },
+  resource_completed: { label: "Resource read", color: "var(--stat-teal)", glyph: "▤" },
+  article_viewed: { label: "Article read", color: "var(--text-tertiary)", glyph: "▥" },
+};
 
 interface Props {
-  refreshKey: number;
   userId: string;
+  /** Pre-fetched entries (dashboard widget mode). When omitted, the component
+   *  self-fetches a paginated feed with a "Load more" control (full-log mode). */
+  entries?: StudyEntry[];
+  refreshKey?: number;
   showViewAll?: boolean;
   scrollable?: boolean;
+  onDeleted?: () => void;
 }
 
 export default function EntryList({
-  refreshKey,
   userId,
+  entries: providedEntries,
+  refreshKey,
   showViewAll,
   scrollable = true,
+  onDeleted,
 }: Props) {
-  const [entries, setEntries] = useState<StudyEntry[]>([]);
-  const [mounted, setMounted] = useState(false);
+  const selfManaged = providedEntries === undefined;
+  const [fetchedEntries, setFetchedEntries] = useState<StudyEntry[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [mounted, setMounted] = useState(!selfManaged);
 
   useEffect(() => {
+    if (!selfManaged) return;
+    let cancelled = false;
     async function load() {
-      const e = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-      setEntries(e);
+      const res = await api.get<{ entries: StudyEntry[]; nextCursor: string | null }>(
+        `/api/entries?userId=${userId}&limit=30`
+      );
+      if (cancelled) return;
+      setFetchedEntries(res.entries);
+      setNextCursor(res.nextCursor);
       setMounted(true);
     }
     load();
-  }, [refreshKey, userId]);
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey, userId, selfManaged]);
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    const res = await api.get<{ entries: StudyEntry[]; nextCursor: string | null }>(
+      `/api/entries?userId=${userId}&limit=30&cursor=${nextCursor}`
+    );
+    setFetchedEntries((prev) => [...prev, ...res.entries]);
+    setNextCursor(res.nextCursor);
+    setLoadingMore(false);
+  }
 
   async function handleDelete(id: string) {
     await api.delete(`/api/entries/${id}`);
-    const e = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-    setEntries(e);
+    if (selfManaged) {
+      setFetchedEntries((prev) => prev.filter((e) => e.id !== id));
+    }
+    onDeleted?.();
   }
+
+  const entries = selfManaged ? fetchedEntries : providedEntries;
 
   if (!mounted) {
     return (
@@ -70,55 +114,85 @@ export default function EntryList({
               year: "numeric",
             })}
           </div>
-          {grouped[date].map((entry) => (
-            <div
-              key={entry.id}
-              className="rounded-lg px-3.5 py-3 mb-2 group transition-colors"
-              style={{
-                background: "var(--card-elevated)",
-                border: "1px solid var(--border)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--border-strong)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "var(--border)";
-              }}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div
-                    className="font-semibold text-sm"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    {entry.topic}
+          {grouped[date].map((entry) => {
+            const meta = KIND_META[entry.kind] ?? KIND_META.manual;
+            return (
+              <div
+                key={entry.id}
+                className="rounded-lg px-3.5 py-3 mb-2 group transition-colors"
+                style={{
+                  background: "var(--card-elevated)",
+                  border: "1px solid var(--border)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border-strong)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = "var(--border)";
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex items-start gap-2.5">
+                    <span
+                      title={meta.label}
+                      className="mt-0.5 w-5 h-5 rounded-md flex items-center justify-center text-[11px] shrink-0"
+                      style={{ background: `color-mix(in srgb, ${meta.color} 14%, transparent)`, color: meta.color }}
+                    >
+                      {meta.glyph}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div
+                          className="font-semibold text-sm"
+                          style={{ color: "var(--text-primary)" }}
+                        >
+                          {entry.topic}
+                        </div>
+                        <span
+                          className="text-[9.5px] px-1.5 py-0.5 rounded-full tracking-wide uppercase"
+                          style={{ fontFamily: "var(--font-display)", color: meta.color, border: `1px solid color-mix(in srgb, ${meta.color} 35%, transparent)` }}
+                        >
+                          {meta.label}
+                        </span>
+                      </div>
+                      <div
+                        className="text-xs mt-0.5 truncate"
+                        style={{ color: "var(--text-tertiary)" }}
+                      >
+                        {entry.resource}
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    className="text-xs mt-0.5 truncate"
+                  <button
+                    onClick={() => handleDelete(entry.id)}
+                    className="opacity-0 group-hover:opacity-100 transition-all text-xs shrink-0 cursor-pointer px-1"
                     style={{ color: "var(--text-tertiary)" }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = "var(--danger)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "var(--text-tertiary)";
+                    }}
+                    title="Delete"
                   >
-                    {entry.resource}
-                  </div>
+                    ✕
+                  </button>
                 </div>
-                <button
-                  onClick={() => handleDelete(entry.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-all text-xs shrink-0 cursor-pointer px-1"
-                  style={{ color: "var(--text-tertiary)" }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.color = "var(--danger)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.color = "var(--text-tertiary)";
-                  }}
-                  title="Delete"
-                >
-                  ✕
-                </button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
+      {selfManaged && nextCursor && (
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="w-full mt-2 py-2.5 rounded-lg text-xs font-semibold cursor-pointer transition-colors disabled:opacity-50"
+          style={{ fontFamily: "var(--font-display)", background: "var(--card-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}
+        >
+          {loadingMore ? "Loading..." : "Load more"}
+        </button>
+      )}
     </>
   );
 

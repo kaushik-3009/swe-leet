@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/components/AuthProvider";
 import AuthPage from "@/components/AuthPage";
@@ -10,12 +10,25 @@ import Heatmap from "@/components/Heatmap";
 import AddEntryForm from "@/components/AddEntryForm";
 import EntryList from "@/components/EntryList";
 import { api } from "@/lib/api";
+import type { DashboardData } from "@/lib/types";
 
 export default function Home() {
   const { user, profile, loading } = useAuth();
   const [refreshKey, setRefreshKey] = useState(0);
   const [seeding, setSeeding] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    api.get<DashboardData>(`/api/dashboard?userId=${user.uid}`).then((d) => {
+      if (!cancelled) setDashboard(d);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, refreshKey]);
 
   function handleRefresh() {
     setRefreshKey((k) => k + 1);
@@ -52,7 +65,7 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-10 sm:py-14">
+      <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-10 sm:py-14">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-2 text-xs tracking-widest uppercase" style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>
@@ -92,15 +105,33 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="space-y-7">
-          <Stats refreshKey={refreshKey} userId={user.uid} />
-          <Heatmap refreshKey={refreshKey} userId={user.uid} />
+        {dashboard ? (
+          <div className="space-y-7">
+            <Stats stats={dashboard.stats} />
+            <Heatmap heatmap={dashboard.heatmap} studyDays={dashboard.stats.studyDays} />
 
-          <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-5 items-start">
-            <AddEntryForm onAdded={handleRefresh} userId={user.uid} refreshKey={refreshKey} />
-            <EntryList refreshKey={refreshKey} userId={user.uid} showViewAll />
+            <div className="grid grid-cols-1 lg:grid-cols-[420px_1fr] gap-5 items-start">
+              <AddEntryForm
+                onAdded={handleRefresh}
+                userId={user.uid}
+                refreshKey={refreshKey}
+                heatmap={dashboard.heatmap}
+                goal={dashboard.weeklyGoal}
+              />
+              <EntryList userId={user.uid} entries={dashboard.recentEntries} showViewAll onDeleted={handleRefresh} />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-7">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="rounded-xl h-32 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
+              ))}
+            </div>
+            <div className="rounded-xl h-52 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
+            <div className="rounded-xl h-64 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
+          </div>
+        )}
       </div>
     </div>
   );

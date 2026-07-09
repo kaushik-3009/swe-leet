@@ -20,10 +20,12 @@ interface Props {
   readOnly?: boolean;
   /** Debounced callback fired ~800ms after the user stops editing. */
   onChange?: (snapshot: TLStoreSnapshot) => void;
+  /** Fired once the tldraw Editor instance mounts, so a parent can drive it (e.g. a shape palette). */
+  onEditorReady?: (editor: Editor) => void;
   height?: string;
 }
 
-export default function DesignCanvas({ snapshot, readOnly, onChange, height = "560px" }: Props) {
+export default function DesignCanvas({ snapshot, readOnly, onChange, onEditorReady, height = "560px" }: Props) {
   const { theme } = useTheme();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -32,6 +34,7 @@ export default function DesignCanvas({ snapshot, readOnly, onChange, height = "5
       if (readOnly) {
         editor.updateInstanceState({ isReadonly: true });
       }
+      onEditorReady?.(editor);
       if (!onChange) return;
       const unlisten = editor.store.listen(
         () => {
@@ -44,7 +47,7 @@ export default function DesignCanvas({ snapshot, readOnly, onChange, height = "5
       );
       return unlisten;
     },
-    [onChange, readOnly]
+    [onChange, readOnly, onEditorReady]
   );
 
   return (

@@ -30,7 +30,20 @@ describe("GET /api/entries", () => {
     expect(res.status).toBe(200);
     expect(getUidMock).not.toHaveBeenCalled();
     const body = await res.json();
-    expect(body.data).toHaveLength(1);
+    expect(body.data.entries).toHaveLength(1);
+    expect(body.data.nextCursor).toBeNull();
+  });
+
+  it("paginates with a cursor and reports nextCursor when more rows exist", async () => {
+    prismaMock.studyEntry.findMany.mockResolvedValue(
+      Array.from({ length: 3 }, (_, i) => ({
+        id: `e${i}`, userId: "u1", topic: "Caching", resource: "book", date: "2026-01-01", createdAt: new Date(), kind: "manual", problemId: null,
+      }))
+    );
+    const res = await GET(new NextRequest("http://localhost/api/entries?userId=u1&limit=2"));
+    const body = await res.json();
+    expect(body.data.entries).toHaveLength(2);
+    expect(body.data.nextCursor).toBe("e1");
   });
 });
 

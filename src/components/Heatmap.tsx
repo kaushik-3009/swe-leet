@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ActivityHeatmapMonth } from "react-activity-heatmap";
 import type { HeatmapActivity } from "react-activity-heatmap";
-import { api } from "@/lib/api";
-import type { StudyEntry } from "@/lib/types";
 
 function getLevel(count: number): number {
   if (count === 0) return 0;
@@ -20,38 +18,22 @@ const MONTHS_LONG = [
 ];
 
 interface Props {
-  refreshKey?: number;
-  userId: string;
+  heatmap: Record<string, number>;
+  studyDays: number;
 }
 
-export default function Heatmap({ refreshKey, userId }: Props) {
-  const [activities, setActivities] = useState<HeatmapActivity[]>([]);
-  const [studyDays, setStudyDays] = useState(0);
-  const [mounted, setMounted] = useState(false);
+export default function Heatmap({ heatmap, studyDays }: Props) {
   const [scale, setScale] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    async function load() {
-      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-      const data: Record<string, number> = {};
-      for (const e of entries) data[e.date] = (data[e.date] || 0) + 1;
-      const result: HeatmapActivity[] = Object.entries(data).map(([date, count]) => ({
-        date: new Date(date + "T12:00:00"),
-        count,
-        level: getLevel(count),
-      }));
-      setActivities(result);
-      setStudyDays(new Set(entries.map((e) => e.date)).size);
-      setMounted(true);
-    }
-    load();
-  }, [refreshKey, userId]);
+  const activities: HeatmapActivity[] = Object.entries(heatmap).map(([date, count]) => ({
+    date: new Date(date + "T12:00:00"),
+    count,
+    level: getLevel(count),
+  }));
 
   useEffect(() => {
-    if (!mounted) return;
-
     function updateScale() {
       const container = containerRef.current;
       const content = contentRef.current;
@@ -66,13 +48,7 @@ export default function Heatmap({ refreshKey, userId }: Props) {
     const observer = new ResizeObserver(updateScale);
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [mounted, activities]);
-
-  if (!mounted) {
-    return (
-      <div className="rounded-xl h-52 animate-pulse" style={{ background: "var(--card)", border: "1px solid var(--border)" }} />
-    );
-  }
+  }, [heatmap]);
 
   const now = new Date();
   const currentMonth = now.getMonth();

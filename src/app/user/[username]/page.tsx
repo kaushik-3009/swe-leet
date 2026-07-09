@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import Navbar from "@/components/Navbar";
 import { api } from "@/lib/api";
-import type { UserProfile, StudyEntry, CategoryWithProgress, SolvedProblemSummary } from "@/lib/types";
+import type { UserProfile, StudyEntry, CategoryWithProgress, SolvedProblemSummary, DashboardData } from "@/lib/types";
 import Link from "next/link";
 import { ActivityHeatmapMonth } from "react-activity-heatmap";
 import type { HeatmapActivity } from "react-activity-heatmap";
@@ -55,16 +55,11 @@ export default function UserProfilePage() {
         if (!profile) { setLoading(false); return; }
         setViewedProfile(profile);
 
-        const userEntries = await api.get<StudyEntry[]>(`/api/entries?userId=${profile.uid}`);
-        setEntries(userEntries);
+        const dashboard = await api.get<DashboardData>(`/api/dashboard?userId=${profile.uid}`);
+        setEntries(dashboard.recentEntries);
+        setStats(dashboard.stats);
 
-        const topics = [...new Set(userEntries.map((e) => e.topic))];
-        const days = new Set(userEntries.map((e) => e.date)).size;
-        setStats({ totalEntries: userEntries.length, uniqueTopics: topics.length, studyDays: days });
-
-        const heatmapData: Record<string, number> = {};
-        for (const e of userEntries) heatmapData[e.date] = (heatmapData[e.date] || 0) + 1;
-        const acts: HeatmapActivity[] = Object.entries(heatmapData).map(([date, count]) => ({
+        const acts: HeatmapActivity[] = Object.entries(dashboard.heatmap).map(([date, count]) => ({
           date: new Date(date + "T12:00:00"),
           count,
           level: getLevel(count),
@@ -208,7 +203,7 @@ export default function UserProfilePage() {
   return (
     <div className="min-h-screen">
       {isOwnProfile && <Navbar />}
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-10 sm:py-14">
+      <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-10 sm:py-14">
         <div className="flex flex-col sm:flex-row items-start gap-6 mb-10">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl font-bold shrink-0" style={{ background: "var(--accent-dim)", color: "var(--accent)", fontFamily: "var(--font-display)" }}>
             {viewedProfile.username.charAt(0).toUpperCase()}

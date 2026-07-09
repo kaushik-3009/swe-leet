@@ -10,17 +10,37 @@ const createSchema = z.object({
   resource: z.string().trim().min(1).max(300),
 });
 
-// Public read: entries are shown on friend profiles without requiring the viewer to be that user.
+const DEFAULT_LIMIT = 30;
+const MAX_LIMIT = 100;
+
+// Public read: entries are shown on friend profiles without requiring the viewer to be
+// that user. Cursor-paginated (by entry id, newest first) so the full study log - which
+// grows unboundedly over months of use - never requires a single unbounded table scan
+// or an unbounded JSON payload; the dashboard widget uses the small default page, and
+// /sessions ("View All") pages through the rest with `cursor`.
 export async function GET(req: NextRequest) {
   try {
     const userId = req.nextUrl.searchParams.get("userId");
     if (!userId) return err("userId query param required", 400);
 
+    const limitParam = Number(req.nextUrl.searchParams.get("limit") ?? DEFAULT_LIMIT);
+    const limit = Number.isFinite(limitParam) ? Math.min(Math.max(1, limitParam), MAX_LIMIT) : DEFAULT_LIMIT;
+    const cursor = req.nextUrl.searchParams.get("cursor");
+
     const entries = await prisma.studyEntry.findMany({
       where: { userId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
-    return ok(entries.map(toStudyEntry));
+
+    const hasMore = entries.length > limit;
+    const page = hasMore ? entries.slice(0, limit) : entries;
+
+    return ok({
+      entries: page.map(toStudyEntry),
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+    });
   } catch (e) {
     return toErrorResponse(e);
   }

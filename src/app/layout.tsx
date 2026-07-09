@@ -8,7 +8,7 @@ const SITE_URL = "https://sd-tracker.vercel.app";
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "System Design Tracker — Track Your Study Progress",
+    default: "System Design Tracker: Track Your Study Progress",
     template: "%s | System Design Tracker",
   },
   description:
@@ -34,7 +34,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: SITE_URL,
     siteName: "System Design Tracker",
-    title: "System Design Tracker — Track Your Study Progress",
+    title: "System Design Tracker: Track Your Study Progress",
     description:
       "A free tool to track your system design study sessions. GitHub-style heatmap, weekly progress, streak tracking, and social accountability.",
     images: [
@@ -42,13 +42,13 @@ export const metadata: Metadata = {
         url: `${SITE_URL}/og-image.png`,
         width: 1200,
         height: 630,
-        alt: "System Design Tracker — Activity Heatmap",
+        alt: "System Design Tracker: Activity Heatmap",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "System Design Tracker — Track Your Study Progress",
+    title: "System Design Tracker: Track Your Study Progress",
     description:
       "GitHub-style heatmap for system design study. Track sessions, maintain streaks, follow friends.",
     images: [`${SITE_URL}/og-image.png`],

@@ -1,14 +1,28 @@
-import type { User, StudyEntry as PrismaStudyEntry, Problem, Category, ProblemProgress, Submission as PrismaSubmission, Review as PrismaReview } from "@prisma/client";
+import type {
+  User,
+  StudyEntry as PrismaStudyEntry,
+  Problem,
+  Category,
+  Resource as PrismaResource,
+  ProblemProgress,
+  Submission as PrismaSubmission,
+  CodeSubmission as PrismaCodeSubmission,
+  Review as PrismaReview,
+} from "@prisma/client";
 import type {
   UserProfile,
   StudyEntry,
   ProblemSummary,
   ProblemDetail,
   Category as CategoryDto,
+  CategoryDetail,
+  Resource,
   ProblemProgressEntry,
   Submission,
+  CodeSubmission,
   Review,
   Rubric,
+  SolutionStep,
   SubmissionFeedback,
   StructuralResult,
 } from "./types";
@@ -36,7 +50,12 @@ export function toStudyEntry(e: PrismaStudyEntry): StudyEntry {
   };
 }
 
-export function toProblemSummary(p: Problem): ProblemSummary {
+type ProblemListFields = Pick<
+  Problem,
+  "id" | "track" | "categoryId" | "slug" | "title" | "difficulty" | "tags" | "estMinutes" | "order" | "diagramType"
+>;
+
+export function toProblemSummary(p: ProblemListFields): ProblemSummary {
   return {
     id: p.id,
     track: p.track,
@@ -47,15 +66,34 @@ export function toProblemSummary(p: Problem): ProblemSummary {
     tags: p.tags,
     estMinutes: p.estMinutes,
     order: p.order,
+    diagramType: p.diagramType,
   };
 }
 
-export function toProblemDetail(p: Problem): ProblemDetail {
-  return { ...toProblemSummary(p), description: p.description };
+type ProblemDetailFields = ProblemListFields &
+  Pick<Problem, "description" | "generalHint" | "stepHints" | "videoUrl" | "solutionCodeLanguage">;
+
+export function toProblemDetail(p: ProblemDetailFields): ProblemDetail {
+  return {
+    ...toProblemSummary(p),
+    description: p.description,
+    generalHint: p.generalHint,
+    stepHints: p.stepHints,
+    videoUrl: p.videoUrl,
+    solutionCodeLanguage: p.solutionCodeLanguage,
+  };
 }
 
 export function toCategory(c: Category): CategoryDto {
-  return { id: c.id, track: c.track, slug: c.slug, title: c.title, description: c.description, order: c.order };
+  return { id: c.id, track: c.track, slug: c.slug, title: c.title, description: c.description, order: c.order, articleTitle: c.articleTitle };
+}
+
+export function toCategoryDetail(c: Category): CategoryDetail {
+  return { ...toCategory(c), articleContent: c.articleContent };
+}
+
+export function toResource(r: PrismaResource, completed: boolean): Resource {
+  return { id: r.id, categoryId: r.categoryId, kind: r.kind, title: r.title, url: r.url, order: r.order, completed };
 }
 
 export function toProgressEntry(p: ProblemProgress): ProblemProgressEntry {
@@ -69,6 +107,21 @@ export function toSubmission(s: PrismaSubmission): Submission {
     problemId: s.problemId,
     version: s.version,
     canvasSnapshot: s.canvasSnapshot,
+    score: s.score,
+    feedback: s.feedback as unknown as SubmissionFeedback,
+    structuralResult: s.structuralResult as unknown as StructuralResult,
+    createdAt: s.createdAt.getTime(),
+  };
+}
+
+export function toCodeSubmission(s: PrismaCodeSubmission): CodeSubmission {
+  return {
+    id: s.id,
+    userId: s.userId,
+    problemId: s.problemId,
+    version: s.version,
+    code: s.code,
+    language: s.language,
     score: s.score,
     feedback: s.feedback as unknown as SubmissionFeedback,
     structuralResult: s.structuralResult as unknown as StructuralResult,
@@ -90,4 +143,8 @@ export function toReview(r: PrismaReview & { user: User }): Review {
 
 export function asRubric(json: unknown): Rubric {
   return json as Rubric;
+}
+
+export function asSolutionSteps(json: unknown): SolutionStep[] {
+  return (json as SolutionStep[] | null) ?? [];
 }

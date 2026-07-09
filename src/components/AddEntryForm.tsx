@@ -2,16 +2,18 @@
 
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
-import type { StudyEntry } from "@/lib/types";
+import type { WeeklyGoalProgress } from "@/lib/types";
 import WeeklyProgress from "./WeeklyProgress";
 
 interface Props {
   onAdded: () => void;
   userId: string;
   refreshKey?: number;
+  heatmap: Record<string, number>;
+  goal: WeeklyGoalProgress | null;
 }
 
-export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
+export default function AddEntryForm({ onAdded, userId, refreshKey, heatmap, goal }: Props) {
   const [topic, setTopic] = useState("");
   const [resource, setResource] = useState("");
   const [existingTopics, setExistingTopics] = useState<string[]>([]);
@@ -19,8 +21,8 @@ export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
 
   useEffect(() => {
     async function load() {
-      const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-      setExistingTopics([...new Set(entries.map((e) => e.topic))].sort());
+      const topics = await api.get<string[]>(`/api/entries/topics?userId=${userId}`);
+      setExistingTopics(topics);
     }
     load();
   }, [userId, refreshKey]);
@@ -36,8 +38,6 @@ export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
     setTopic("");
     setResource("");
     setShowSuggestions(false);
-    const entries = await api.get<StudyEntry[]>(`/api/entries?userId=${userId}`);
-    setExistingTopics([...new Set(entries.map((e) => e.topic))].sort());
     onAdded();
   }
 
@@ -98,7 +98,7 @@ export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
             onFocus={(e) => { e.currentTarget.style.borderColor = "var(--accent)"; e.currentTarget.style.boxShadow = "0 0 0 3px var(--accent-dim)"; }}
             onBlur={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.boxShadow = "none"; }}
           />
-          <p className="text-[11.5px] mt-1.5" style={{ color: "var(--text-tertiary)" }}>Where you learned it — book, video, article</p>
+          <p className="text-[11.5px] mt-1.5" style={{ color: "var(--text-tertiary)" }}>Where you learned it (book, video, article)</p>
         </div>
 
         <button
@@ -112,7 +112,7 @@ export default function AddEntryForm({ onAdded, userId, refreshKey }: Props) {
           Add Entry
         </button>
 
-        <WeeklyProgress userId={userId} refreshKey={refreshKey ?? 0} />
+        <WeeklyProgress heatmap={heatmap} goal={goal} onGoalChanged={onAdded} />
       </form>
     </div>
   );

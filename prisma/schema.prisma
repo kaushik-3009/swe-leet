@@ -15,12 +15,15 @@ model User {
   email       String
   createdAt   DateTime @default(now())
 
-  entries         StudyEntry[]
-  progress        ProblemProgress[]
-  submissions     Submission[]
-  reviews         Review[]
-  following       Follow[]           @relation("Follower")
-  followers       Follow[]           @relation("Following")
+  entries          StudyEntry[]
+  progress         ProblemProgress[]
+  submissions      Submission[]
+  codeSubmissions  CodeSubmission[]
+  reviews          Review[]
+  following        Follow[]           @relation("Follower")
+  followers        Follow[]           @relation("Following")
+  resourceProgress ResourceProgress[]
+  weeklyGoals      WeeklyGoal[]
 
   @@index([username])
 }
@@ -37,10 +40,23 @@ model Follow {
   @@index([followingId])
 }
 
+// Drives heatmap/entry-log activity-type differentiation (colors/icons per kind in the UI):
+//  - manual: user-typed dashboard entry (pre-existing behavior)
+//  - problem_started: auto-logged the first time a user meaningfully interacts with a
+//    problem page (canvas edit, code edit, or a checkbox) - see /api/progress/touch
+//  - problem_attempt / problem_solved: a graded canvas or code submission, below/at-or-above
+//    the solved threshold
+//  - problem_checklist: a problem manually marked done via checkbox, independent of grading
+//  - resource_completed: a study-plan resource (external link or our own article) checked off
+//  - article_viewed: auto-logged the first time in a day a user opens one of our own topic articles
 enum EntryKind {
   manual
+  problem_started
   problem_attempt
   problem_solved
+  problem_checklist
+  resource_completed
+  article_viewed
 }
 
 model StudyEntry {
@@ -58,6 +74,7 @@ model StudyEntry {
 
   @@index([userId, createdAt])
   @@index([userId, date])
+  @@index([userId, kind])
 }
 
 // ─── Curated roadmap content ───────────────────────────────────────────────
@@ -74,38 +91,96 @@ enum Difficulty {
 }
 
 model Category {
-  id          String   @id @default(cuid())
-  track       Track
-  slug        String   @unique
-  title       String
-  description String
-  order       Int
+  id             String  @id @default(cuid())
+  track          Track
+  slug           String  @unique
+  title          String
+  description    String
+  order          Int
+  // Our own on-site, illustrated write-up for this topic - lets a user study without
+  // leaving the app. Rendered by the same Markdown component as problem solutions.
+  articleTitle   String?
+  articleContent String? // markdown, headers + ascii-art/text diagrams + code fences
 
-  problems Problem[]
+  problems  Problem[]
+  resources Resource[]
 
   @@index([track, order])
 }
 
+// A study-plan topic page's curated reading list: external links plus (one, synthetic)
+// row of kind ARTICLE representing "read our own write-up" - both are checkbox-trackable
+// via ResourceProgress, satisfying "every resource has its own checkbox" for both
+// external and on-site material without duplicating the article content anywhere else.
+enum ResourceKind {
+  EXTERNAL
+  ARTICLE
+}
+
+model Resource {
+  id         String       @id @default(cuid())
+  categoryId String
+  kind       ResourceKind @default(EXTERNAL)
+  title      String
+  url        String? // null for ARTICLE kind - content lives on Category.articleContent
+  order      Int
+
+  category    Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  completions ResourceProgress[]
+
+  @@index([categoryId, order])
+}
+
+model ResourceProgress {
+  userId      String
+  resourceId  String
+  completedAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, resourceId])
+}
+
+enum DiagramType {
+  ARCHITECTURE
+  SEQUENCE
+  CLASS
+}
+
 model Problem {
-  id                   String     @id @default(cuid())
+  id                   String      @id @default(cuid())
   track                Track
   categoryId           String
-  slug                 String     @unique
+  slug                 String      @unique
   title                String
-  description          String // markdown: requirements/prompt
+  description          String // markdown: requirements/constraints/clarifying context
   difficulty           Difficulty
   tags                 String[]
   estMinutes           Int
   order                Int
-  referenceExplanation String // markdown
-  referenceDiagram     Json // tldraw snapshot
+  diagramType          DiagramType @default(ARCHITECTURE) // what the canvas should contain
+  // True for the small, handpicked handful of problems per topic shown inline on the
+  // study-plan topic page ("bridge into practice"). The full /problems list shows every
+  // problem regardless of this flag - both views read/write the same ProblemProgress
+  // row, so completion is automatically in sync (single source of truth).
+  inStudyPlanSubset    Boolean     @default(false)
+  generalHint          String? // one nudge shown before the incremental hints
+  stepHints            String[] // incremental hints, revealed one at a time
+  videoUrl             String? // optional YouTube link for video learners
+  referenceExplanation String // markdown: rationale, trade-offs, common mistakes, gotchas, edge cases
+  referenceDiagram     Json // tldraw snapshot (architecture/sequence problems)
+  solutionCode         String? // reference implementation (LLD problems - design is code, not just a diagram)
+  solutionCodeLanguage String      @default("python")
+  solutionSteps        Json? // ordered [{title, body}] for the step-by-step progressive reveal
   rubric               Json // { requiredComponents: string[], requiredConnections: {from:string,to:string}[], weights?: Record<string, number> }
 
-  category    Category           @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  progress    ProblemProgress[]
-  submissions Submission[]
-  reviews     Review[]
-  entries     StudyEntry[]
+  category        Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  progress        ProblemProgress[]
+  submissions     Submission[]
+  codeSubmissions CodeSubmission[]
+  reviews         Review[]
+  entries         StudyEntry[]
 
   @@index([track, categoryId, order])
 }
@@ -145,6 +220,39 @@ model Submission {
   problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
   @@index([userId, problemId, version])
+}
+
+// LLD "code mode": an alternative (or addition) to the canvas for problems that are
+// fundamentally about code, not diagrams. Graded by the same hybrid-style pipeline as
+// canvas submissions (see src/lib/grading/code.ts): a lightweight structural pass
+// (does the code define classes/functions matching the rubric's expected components)
+// blended with an AI correctness/structure/OOP-principles review.
+model CodeSubmission {
+  id               String   @id @default(cuid())
+  userId           String
+  problemId        String
+  version          Int
+  code             String
+  language         String
+  score            Int
+  feedback         Json // { strengths: string[], missing: string[], improvements: string[] }
+  structuralResult Json
+  createdAt        DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, problemId, version])
+}
+
+model WeeklyGoal {
+  userId         String
+  weekStart      String // YYYY-MM-DD, Monday of the target week
+  targetSessions Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, weekStart])
 }
 
 model Review {

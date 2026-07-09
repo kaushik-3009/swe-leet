@@ -41,6 +41,21 @@ export default function RoadmapPage() {
     load();
   }, [track, user]);
 
+  async function toggleProblem(problemId: string, next: boolean) {
+    const prevCategories = categories;
+    setCategories((cats) =>
+      cats.map((c) => ({
+        ...c,
+        problems: c.problems.map((p) => (p.id === problemId ? { ...p, status: next ? "SOLVED" : "IN_PROGRESS" } : p)),
+      }))
+    );
+    try {
+      await api.post("/api/progress/checklist", { problemId, done: next });
+    } catch {
+      setCategories(prevCategories);
+    }
+  }
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -61,7 +76,7 @@ export default function RoadmapPage() {
   return (
     <div className="min-h-screen">
       <Navbar />
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-10 sm:py-14">
+      <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 py-10 sm:py-14">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-8">
           <div>
             <div className="flex items-center gap-2 mb-2 text-xs tracking-widest uppercase" style={{ fontFamily: "var(--font-display)", color: "var(--accent)" }}>
@@ -120,36 +135,46 @@ export default function RoadmapPage() {
 
                 <div className="space-y-2">
                   {cat.problems.map((p) => (
-                    <button
+                    <div
                       key={p.id}
-                      onClick={() => router.push(`/practice/${p.slug}`)}
-                      className="w-full flex items-center justify-between gap-3 px-3.5 py-3 rounded-lg text-left cursor-pointer transition-colors"
+                      className="w-full flex items-center gap-3 px-3.5 py-3 rounded-lg transition-colors"
                       style={{ background: "var(--card-elevated)", border: "1px solid var(--border)" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; }}
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <StatusDot status={p.status} />
-                        <div className="min-w-0">
-                          <div className="font-semibold text-sm truncate" style={{ color: "var(--text-primary)" }}>{p.title}</div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <span className="text-[11px]" style={{ fontFamily: "var(--font-display)", color: DIFFICULTY_COLOR[p.difficulty] }}>{p.difficulty}</span>
-                            <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>&middot; ~{p.estMinutes} min</span>
+                      <input
+                        type="checkbox"
+                        checked={p.status === "SOLVED"}
+                        onChange={(e) => toggleProblem(p.id, e.target.checked)}
+                        className="w-4 h-4 shrink-0 cursor-pointer"
+                        style={{ accentColor: "var(--accent)" }}
+                        title="Mark as done"
+                      />
+                      <button
+                        onClick={() => router.push(`/practice/${p.slug}`)}
+                        className="flex-1 flex items-center justify-between gap-3 min-w-0 text-left cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <StatusDot status={p.status} />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm truncate" style={{ color: "var(--text-primary)" }}>{p.title}</div>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className="text-[11px]" style={{ fontFamily: "var(--font-display)", color: DIFFICULTY_COLOR[p.difficulty] }}>{p.difficulty}</span>
+                              <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>&middot; ~{p.estMinutes} min</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <span
-                        className="text-[11px] px-2.5 py-1 rounded-full shrink-0"
-                        style={{
-                          fontFamily: "var(--font-display)",
-                          color: p.status === "SOLVED" ? "var(--accent)" : "var(--text-tertiary)",
-                          background: p.status === "SOLVED" ? "var(--accent-dim)" : "var(--card)",
-                          border: `1px solid ${p.status === "SOLVED" ? "var(--accent-dim-border)" : "var(--border)"}`,
-                        }}
-                      >
-                        {STATUS_LABEL[p.status]}
-                      </span>
-                    </button>
+                        <span
+                          className="text-[11px] px-2.5 py-1 rounded-full shrink-0"
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            color: p.status === "SOLVED" ? "var(--accent)" : "var(--text-tertiary)",
+                            background: p.status === "SOLVED" ? "var(--accent-dim)" : "var(--card)",
+                            border: `1px solid ${p.status === "SOLVED" ? "var(--accent-dim-border)" : "var(--border)"}`,
+                          }}
+                        >
+                          {STATUS_LABEL[p.status]}
+                        </span>
+                      </button>
+                    </div>
                   ))}
                 </div>
               </div>

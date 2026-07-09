@@ -54,7 +54,7 @@ export default function Navbar() {
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      <div className="max-w-[1400px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 h-14 flex items-center justify-between gap-4">
+      <div className="max-w-[1600px] mx-auto px-6 sm:px-8 lg:px-12 xl:px-16 h-14 flex items-center justify-between gap-4">
         <Link
           href="/"
           className="flex items-center gap-2 shrink-0"
@@ -65,6 +65,16 @@ export default function Navbar() {
             style={{ background: "var(--accent)", boxShadow: "0 0 8px var(--accent-glow)" }}
           />
           <span className="text-sm font-semibold hidden sm:inline">SD Tracker</span>
+        </Link>
+
+        <Link
+          href="/study-plan"
+          className="text-sm font-medium shrink-0 hidden md:inline transition-colors"
+          style={{ color: "var(--text-secondary)" }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--text-primary)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--text-secondary)"; }}
+        >
+          Study Plan
         </Link>
 
         <Link

@@ -1,11 +1,15 @@
 import { extractGraph } from "./extract";
 import { matchStructural } from "./structural";
+import { matchCodeStructural } from "./codeStructural";
 import { gradeWithAi } from "./ai";
+import { gradeCodeWithAi } from "./code";
 import type { Rubric, SubmissionFeedback, StructuralResult } from "@/lib/types";
 
 export { extractGraph } from "./extract";
 export { matchStructural } from "./structural";
+export { matchCodeStructural } from "./codeStructural";
 export { gradeWithAi } from "./ai";
+export { gradeCodeWithAi } from "./code";
 
 export interface GradeResult {
   score: number;
@@ -41,6 +45,45 @@ export async function gradeSubmission(params: {
         improvements:
           structural.missingConnections.length > 0
             ? ["Add the missing connections between components listed above."]
+            : [],
+      };
+
+  return {
+    score,
+    feedback,
+    structuralResult: {
+      matchedComponents: structural.matchedComponents,
+      missingComponents: structural.missingComponents,
+      matchedConnections: structural.matchedConnections,
+      missingConnections: structural.missingConnections,
+      coverage: structural.coverage,
+    },
+  };
+}
+
+export async function gradeCodeSubmission(params: {
+  problemTitle: string;
+  problemDescription: string;
+  rubric: Rubric;
+  code: string;
+  language: string;
+}): Promise<GradeResult> {
+  const structural = matchCodeStructural(params.code, params.rubric);
+  const ai = await gradeCodeWithAi(params);
+
+  const score = ai ? Math.round(0.3 * structural.coverage + 0.7 * ai.score) : structural.coverage;
+
+  const feedback: SubmissionFeedback = ai
+    ? { strengths: ai.strengths, missing: ai.missing, improvements: ai.improvements }
+    : {
+        strengths: structural.matchedComponents.map((c) => `Code references ${c}`),
+        missing: [
+          ...structural.missingComponents.map((c) => `Missing expected class/component: ${c}`),
+          ...structural.missingConnections.map((c) => `Missing expected relationship: ${c}`),
+        ],
+        improvements:
+          structural.missingComponents.length > 0
+            ? ["Add the missing classes/components listed above and wire up the relationships between them."]
             : [],
       };
 
