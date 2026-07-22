@@ -47,3 +47,7 @@ next-env.d.ts
 !docs/**/*.md
 *.html
 DESIGN.md
+
+# private local handoff notes and resume material
+.private/
+docs/PROJECT_RESUME_BULLETS.md

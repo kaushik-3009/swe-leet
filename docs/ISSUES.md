@@ -96,13 +96,11 @@ constraint. Worth a dedicated pass later. This session's own new/changed files
 
 ## Open / accepted limitations
 
-- **No live end-to-end browser testing.** This environment has no real Neon Postgres,
-  Firebase Admin service account, or Anthropic API key, so nothing here has been
-  exercised against a live database or real AI grading in an actual signed-in browser
-  session. Verification is `tsc --noEmit`, `eslint`, `next build`, and `vitest` (including
-  a content round-trip that grades every seeded reference solution against its own
-  rubric). Run the real click-through once credentials are configured; see
-  `docs/RUNBOOK.md`.
+- **No automated signed-in browser test.** The Neon migration/content seed and controlled
+  Gemini/OnlineCompiler provider smoke checks have been verified, but this repository still
+  lacks a Firebase-authenticated browser harness. The remaining manual click-through is
+  documented in `docs/RUNBOOK.md`; it should be run after changes to grading, provider
+  integrations, schema, or practice-page behavior.
 - **LLD code mode uses a plain styled `<textarea>`, not a full code editor** (no syntax
   highlighting, no IntelliSense). A real editor (Monaco/CodeMirror) is a reasonable
   future upgrade but adds meaningful bundle size; given the grading is AI/structural

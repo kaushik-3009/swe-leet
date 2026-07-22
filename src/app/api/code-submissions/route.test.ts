@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { prismaMock, getUidMock, gradeCodeSubmissionMock } = vi.hoisted(() => ({
+const { prismaMock, getUidMock, gradeCodeSubmissionMock, consumeRateLimitMock, executePublicTestsMock } = vi.hoisted(() => ({
   prismaMock: {
     problem: { findUnique: vi.fn() },
     codeSubmission: { aggregate: vi.fn(), create: vi.fn(), findMany: vi.fn() },
+    codeRun: { create: vi.fn() },
     problemProgress: { findUnique: vi.fn(), upsert: vi.fn() },
     studyEntry: { create: vi.fn() },
   },
   getUidMock: vi.fn(),
   gradeCodeSubmissionMock: vi.fn(),
+  consumeRateLimitMock: vi.fn(),
+  executePublicTestsMock: vi.fn(),
 }));
 
 vi.mock("@/lib/db", () => ({ prisma: prismaMock }));
@@ -18,6 +21,8 @@ vi.mock("@/lib/auth-server", async (importOriginal) => {
   return { ...actual, getUidFromRequest: getUidMock };
 });
 vi.mock("@/lib/grading", () => ({ gradeCodeSubmission: gradeCodeSubmissionMock }));
+vi.mock("@/lib/rate-limit", () => ({ consumeRateLimit: consumeRateLimitMock }));
+vi.mock("@/lib/compiler/publicTests", () => ({ executePublicTests: executePublicTestsMock }));
 
 const { POST, GET } = await import("./route");
 
@@ -41,6 +46,8 @@ describe("POST /api/code-submissions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getUidMock.mockResolvedValue("user-1");
+    consumeRateLimitMock.mockResolvedValue({ allowed: true, count: 1, retryAfterSeconds: 60 });
+    executePublicTestsMock.mockResolvedValue(null);
     prismaMock.problem.findUnique.mockResolvedValue(LLD_PROBLEM);
     prismaMock.codeSubmission.aggregate.mockResolvedValue({ _max: { version: null } });
     prismaMock.problemProgress.findUnique.mockResolvedValue(null);
@@ -63,6 +70,45 @@ describe("POST /api/code-submissions", () => {
     expect(prismaMock.studyEntry.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ kind: "problem_solved", problemId: "problem-1" }) })
     );
+  });
+
+  it("persists and returns a provider-failed public run without blocking grading", async () => {
+    executePublicTestsMock.mockResolvedValue({
+      compiler: "python-3.14",
+      tests: [{
+        id: "public",
+        name: "Public behavior",
+        passed: false,
+        status: "provider_error",
+        output: "",
+        error: "Internal error: code execution failed",
+        exitCode: 1,
+        signal: null,
+        durationMs: null,
+        memoryKb: null,
+      }],
+      result: { tests: [], summary: { total: 1, passed: 0, failed: 1 } },
+      status: "PROVIDER_ERROR",
+      durationMs: null,
+      memoryKb: null,
+    });
+    gradeCodeSubmissionMock.mockResolvedValue({
+      score: 25,
+      feedback: { strengths: [], missing: ["ParkingLot"], improvements: [] },
+      structuralResult: { matchedComponents: [], missingComponents: ["ParkingLot"], matchedConnections: [], missingConnections: [], coverage: 25 },
+    });
+    prismaMock.codeSubmission.create.mockResolvedValue({
+      id: "sub-2", userId: "user-1", problemId: "problem-1", version: 1, code: "class ParkingLot: pass", language: "python", score: 25,
+      feedback: {}, structuralResult: {}, createdAt: new Date(),
+    });
+    prismaMock.codeRun.create.mockResolvedValue({ id: "run-2" });
+    prismaMock.problemProgress.upsert.mockResolvedValue({ status: "IN_PROGRESS", bestScore: 25 });
+
+    const res = await POST(postRequest({ problemId: "problem-1", code: "class ParkingLot: pass", language: "python" }));
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(body.data.publicRun.status).toBe("PROVIDER_ERROR");
+    expect(prismaMock.codeRun.create).toHaveBeenCalledWith({ data: expect.objectContaining({ status: "PROVIDER_ERROR", codeSubmissionId: "sub-2" }) });
   });
 
   it("rejects code submissions for a System Design problem", async () => {

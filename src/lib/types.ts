@@ -46,6 +46,8 @@ export interface UserProfile {
   displayName: string;
   email: string;
   createdAt: number;
+  /** Synthetic staging/demo profiles are explicitly labeled on profile surfaces. */
+  isSynthetic?: boolean;
 }
 
 export type Track = "SYSTEM_DESIGN" | "LLD";
@@ -163,6 +165,15 @@ export interface StructuralResult {
   coverage: number;
 }
 
+export interface GradingMetadata {
+  provider?: "gemini";
+  servedModel?: string;
+  attemptedModels?: string[];
+  fallbackIndex?: number;
+  latencyMs?: number;
+  status: "ai" | "structural_only";
+}
+
 export interface Submission {
   id: string;
   userId: string;
@@ -172,6 +183,7 @@ export interface Submission {
   score: number;
   feedback: SubmissionFeedback;
   structuralResult: StructuralResult;
+  gradingMetadata?: GradingMetadata | null;
   createdAt: number;
 }
 
@@ -195,5 +207,51 @@ export interface CodeSubmission {
   score: number;
   feedback: SubmissionFeedback;
   structuralResult: StructuralResult;
+  createdAt: number;
+}
+
+export type CodeRunStatus =
+  | "PASSED"
+  | "FAILED"
+  | "COMPILE_ERROR"
+  | "RUNTIME_ERROR"
+  | "TIMEOUT"
+  | "PROVIDER_ERROR"
+  | "RATE_LIMITED";
+
+export interface CodeRunTestResult {
+  id: string;
+  name: string;
+  passed: boolean;
+  status: "success" | "compile_error" | "runtime_error" | "timeout" | "provider_error";
+  output: string;
+  error: string;
+  /** Safe execution diagnostics; raw provider responses are never persisted. */
+  exitCode?: number | null;
+  signal?: string | null;
+  durationMs: number | null;
+  memoryKb: number | null;
+}
+
+export interface CodeRunSummary {
+  total: number;
+  passed: number;
+  failed: number;
+}
+
+export interface CodeRun {
+  id: string;
+  userId: string;
+  problemId: string;
+  codeSubmissionId?: string | null;
+  compiler: string;
+  language: string;
+  codeHash: string;
+  codeBytes: number;
+  status: CodeRunStatus;
+  tests: CodeRunTestResult[];
+  summary: CodeRunSummary;
+  durationMs: number | null;
+  memoryKb: number | null;
   createdAt: number;
 }

@@ -10,6 +10,10 @@ export function err(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
+export function errWithHeaders(message: string, status: number, headers: HeadersInit) {
+  return NextResponse.json({ error: message }, { status, headers });
+}
+
 /** Normalizes thrown errors from a route handler into a JSON error envelope. */
 export function toErrorResponse(e: unknown) {
   if (e instanceof AuthError) return err(e.message, e.status);

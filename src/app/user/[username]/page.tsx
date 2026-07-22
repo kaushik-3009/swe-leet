@@ -216,6 +216,11 @@ export default function UserProfilePage() {
               <span className="text-sm px-2.5 py-0.5 rounded-full w-fit" style={{ fontFamily: "var(--font-display)", background: "var(--card-elevated)", border: "1px solid var(--border)", color: "var(--text-tertiary)" }}>
                 @{viewedProfile.username}
               </span>
+              {viewedProfile.isSynthetic && (
+                <span className="text-[11px] px-2.5 py-1 rounded-full w-fit" style={{ fontFamily: "var(--font-display)", background: "var(--stat-amber-bg)", border: "1px solid var(--stat-amber)", color: "var(--stat-amber)" }}>
+                  Generated sample
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-4 text-sm" style={{ color: "var(--text-secondary)" }}>
               <button onClick={openFollowers} className="cursor-pointer hover:underline">

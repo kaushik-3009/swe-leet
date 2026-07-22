@@ -1,14 +1,9 @@
-import { NextRequest } from "next/server";
-import { prisma } from "@/lib/db";
-import { getUidFromRequest } from "@/lib/auth-server";
-import { ok, toErrorResponse } from "@/lib/api-response";
+import { err } from "@/lib/api-response";
 
-export async function POST(req: NextRequest) {
-  try {
-    const uid = await getUidFromRequest(req);
-    await prisma.studyEntry.deleteMany({ where: { userId: uid } });
-    return ok({ cleared: true });
-  } catch (e) {
-    return toErrorResponse(e);
-  }
+/**
+ * Destructive synthetic-data cleanup is intentionally not exposed over HTTP.
+ * Use a reviewed staging-only database operation with an explicit run id.
+ */
+export async function POST() {
+  return err("Synthetic data cleanup is CLI/database-admin only", 404);
 }

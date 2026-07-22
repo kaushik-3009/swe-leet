@@ -11,7 +11,9 @@ for known limitations, see `docs/ISSUES.md`.
 |---|---|---|
 | [Neon](https://neon.tech) | Postgres database | Yes, for dev and for the 20-30 concurrent user launch target |
 | [Firebase](https://console.firebase.google.com) | Auth (Email/Password) | Yes |
-| [Anthropic Console](https://console.anthropic.com) | AI-assisted grading | Optional (grading falls back to structural-only scoring without it) |
+| [Google AI Studio](https://aistudio.google.com) | Optional Gemini diagram semantics | Optional (grading falls back to structural-only scoring without it) |
+| [Anthropic Console](https://console.anthropic.com) | Existing LLD code-quality grading | Optional |
+| [OnlineCompiler](https://onlinecompiler.io/docs) | Server-side Python public-test execution | Configure only after rotating provider credentials |
 | [Vercel](https://vercel.com) | Hosting | Yes, for launch scale |
 
 If you're continuing an existing deployment, reuse the same Firebase project as before
@@ -41,16 +43,20 @@ Fill in `.env`:
 3. **Neon Postgres** (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`): create a Neon project,
    open Connection Details, and copy both the pooled ("Pooled connection") and direct
    ("Direct connection") connection strings. Full detail in `docs/ENV.md`.
-4. **Anthropic** (`ANTHROPIC_API_KEY`, optional): console.anthropic.com -> API Keys.
-   Leave unset to run with structural-only grading (no AI feedback text, but scoring
-   still works).
+4. **Gemini** (`GEMINI_API_KEY`, optional): configure a server-only key and leave the
+   requested model chain in `GEMINI_GRADING_MODELS`. Set `GEMINI_GRADING_ENABLED=false`
+   to force deterministic structural-only grading.
+5. **Anthropic** (`ANTHROPIC_API_KEY`, optional): used only for LLD code-quality feedback.
+6. **OnlineCompiler**: configure a rotated server-only `ONLINECOMPILER_REST_API_KEY`.
+   The CodeMirror workspace is application-controlled, and the REST key is never used in
+   browser code.
 
 ## 3. Database setup (first time)
 
 ```bash
-npm run db:migrate      # applies prisma/schema.prisma, creates all tables in Neon
-npm run seed:content    # idempotently upserts all Study Plan categories/resources/articles
-                         # and all System Design + LLD problems (with hints, solutions, etc.)
+npm run db:generate     # regenerate the Prisma client after schema changes
+npm run db:deploy       # apply checked-in migrations non-interactively
+npm run seed:content    # idempotently upserts categories/resources/articles/problems
 npm run dev
 ```
 
@@ -122,12 +128,45 @@ npm run seed:content
 8. Visit your own `/user/<username>` profile and a friend's, confirm both render and that
    entry-kind badges (manual, problem started, problem solved, checklist, resource, article)
    are visually distinct in the entry log.
+9. On an LLD practice page, enter a small Python implementation and click `Run public tests`.
+   Verify named pass/fail rows, aggregate counts, duration/memory when available, and the
+   stale-run warning after editing the code. Confirm this exploratory run does not create a
+   study entry or change problem progress.
+10. Click `Submit Code for Grading` and confirm the submission receives code-quality feedback,
+    the public execution result is linked to it, and progress/activity behavior remains intact.
+11. With Gemini configured, submit a diagram and confirm safe grading metadata identifies the
+    served model. Temporarily disable Gemini and confirm deterministic structural-only grading
+    still returns a score. Do not place provider keys in browser variables or inspectable source.
+12. Verify the CodeMirror Python workspace loads with line numbers, syntax highlighting,
+    indentation, and bracket matching. Confirm the visible editor content is exactly what
+    `Run public tests` and `Submit Code for Grading` send to the server.
 
 There is no automated end-to-end browser test in this repo (see `docs/ISSUES.md` for why);
 this manual pass is the closest substitute and should be run after any change that touches
-grading, the schema, or a page that reads `/api/dashboard` or `/api/roadmap`.
+grading, the schema, provider integrations, or a page that reads `/api/dashboard` or
+`/api/roadmap`.
 
-## 7. Deploying to production (Vercel + Neon)
+## 7. Synthetic staging data and metrics
+
+Generate deterministic sample data only in staging:
+
+```bash
+npm run demo:generate -- --run-id=synthetic-demo-v1
+npm run metrics:report
+npm run metrics:report -- --include-synthetic
+```
+
+The generator creates 75 profiles marked `isSynthetic=true` and repeatable activity. It
+never mutates the authenticated caller and never deletes rows. The default metrics report
+excludes synthetic users. The optional section is labeled synthetic test data and cannot be
+used as evidence of real-user adoption, DAU, retention, or growth.
+
+The HTTP demo routes are disabled by default. The seed compatibility route requires
+`DEMO_DATA_ENABLED=true` plus `x-demo-admin-secret` and still points operators to the
+staging CLI. Cleanup is a reviewed database-admin operation with an explicitly supplied
+synthetic run id, not an unauthenticated endpoint.
+
+## 8. Deploying to production (Vercel + Neon)
 
 1. Push the branch, open a PR into `main`, merge once reviewed.
 2. In Vercel, import the repo (or it's already connected: pushing to `main` triggers a

@@ -93,3 +93,36 @@ body {
 input::placeholder {
   color: var(--text-tertiary);
 }
+
+.code-editor-shell {
+  overflow: hidden;
+  min-height: 360px;
+}
+
+.code-editor .cm-editor {
+  min-height: 360px;
+  background: var(--card);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.code-editor .cm-scroller {
+  font-family: var(--font-display);
+  line-height: 1.6;
+}
+
+.code-editor .cm-gutters {
+  background: var(--card-elevated);
+  color: var(--text-tertiary);
+  border-right: 1px solid var(--border);
+}
+
+.code-editor .cm-activeLine,
+.code-editor .cm-activeLineGutter {
+  background: var(--accent-dim);
+}
+
+.code-editor .cm-focused {
+  outline: none;
+}

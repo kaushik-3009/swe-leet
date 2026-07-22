@@ -25,6 +25,7 @@ import type {
   SolutionStep,
   SubmissionFeedback,
   StructuralResult,
+  GradingMetadata,
 } from "./types";
 
 export function toUserProfile(u: User): UserProfile {
@@ -34,6 +35,7 @@ export function toUserProfile(u: User): UserProfile {
     displayName: u.displayName,
     email: u.email,
     createdAt: u.createdAt.getTime(),
+    isSynthetic: (u as User & { isSynthetic?: boolean }).isSynthetic,
   };
 }
 
@@ -110,6 +112,7 @@ export function toSubmission(s: PrismaSubmission): Submission {
     score: s.score,
     feedback: s.feedback as unknown as SubmissionFeedback,
     structuralResult: s.structuralResult as unknown as StructuralResult,
+    gradingMetadata: (s as PrismaSubmission & { gradingMetadata?: unknown }).gradingMetadata as GradingMetadata | null,
     createdAt: s.createdAt.getTime(),
   };
 }

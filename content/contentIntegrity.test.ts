@@ -46,6 +46,13 @@ describe("content integrity", () => {
     }
   });
 
+  it("every LLD problem ships a trusted Python execution harness", () => {
+    for (const p of lldProblems) {
+      expect(p.executionSpec?.language, `${p.slug} must use the Python execution contract`).toBe("python");
+      expect(p.executionSpec?.harness.trim(), `${p.slug} has an empty execution harness`).toBeTruthy();
+    }
+  });
+
   it("has no em dashes in user-facing content fields", () => {
     const offenders: string[] = [];
     const checkField = (owner: string, field: string, value: string | undefined) => {

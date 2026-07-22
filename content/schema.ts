@@ -34,6 +34,14 @@ export interface SolutionStepSpec {
   body: string;
 }
 
+/** Trusted tests appended to a reference/user Python implementation by the runner. */
+export interface PythonExecutionSpec {
+  language: "python";
+  harness: string;
+}
+
+export type ExecutionSpec = PythonExecutionSpec;
+
 export interface ProblemSpec {
   slug: string;
   categorySlug: string;
@@ -55,5 +63,6 @@ export interface ProblemSpec {
   referenceExplanation: string; // markdown: rationale, trade-offs, common mistakes, gotchas, edge cases
   solutionCode?: string; // LLD: a real reference implementation
   solutionCodeLanguage?: string; // default "python"
+  executionSpec?: ExecutionSpec;
   solutionSteps?: SolutionStepSpec[]; // ordered, for the step-by-step progressive reveal
 }

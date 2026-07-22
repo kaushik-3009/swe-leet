@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     });
     if (!problem) return err("Problem not found", 404);
 
-    const { score, feedback, structuralResult } = await gradeSubmission({
+    const { score, feedback, structuralResult, gradingMetadata } = await gradeSubmission({
       problemTitle: problem.title,
       problemDescription: problem.description,
       rubric: asRubric(problem.rubric),
@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
         score,
         feedback: feedback as unknown as object,
         structuralResult: structuralResult as unknown as object,
-      },
+        gradingMetadata: gradingMetadata as unknown as object,
+      } as never,
     });
 
     const solved = score >= SOLVED_THRESHOLD;

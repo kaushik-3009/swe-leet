@@ -3,18 +3,25 @@ import { matchStructural } from "./structural";
 import { matchCodeStructural } from "./codeStructural";
 import { gradeWithAi } from "./ai";
 import { gradeCodeWithAi } from "./code";
-import type { Rubric, SubmissionFeedback, StructuralResult } from "@/lib/types";
+import type { GradingMetadata, Rubric, SubmissionFeedback, StructuralResult } from "@/lib/types";
 
 export { extractGraph } from "./extract";
 export { matchStructural } from "./structural";
 export { matchCodeStructural } from "./codeStructural";
 export { gradeWithAi } from "./ai";
+export {
+  DEFAULT_GEMINI_MODELS,
+  DEFAULT_GEMINI_TIMEOUT_MS,
+  getGeminiModelChain,
+  getGeminiTimeoutMs,
+} from "./gemini";
 export { gradeCodeWithAi } from "./code";
 
 export interface GradeResult {
   score: number;
   feedback: SubmissionFeedback;
   structuralResult: StructuralResult;
+  gradingMetadata?: GradingMetadata;
 }
 
 export async function gradeSubmission(params: {
@@ -58,6 +65,7 @@ export async function gradeSubmission(params: {
       missingConnections: structural.missingConnections,
       coverage: structural.coverage,
     },
+    gradingMetadata: ai?.metadata ?? { status: "structural_only" },
   };
 }
 

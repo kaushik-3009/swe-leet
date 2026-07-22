@@ -9,8 +9,9 @@ import Markdown from "@/components/Markdown";
 import SolutionPanel from "@/components/SolutionPanel";
 import DesignCanvas from "@/components/canvas/DesignCanvas";
 import ArchitectureShapePalette from "@/components/canvas/ArchitectureShapePalette";
+import CodeEditor from "@/components/CodeEditor";
 import { api, ApiError } from "@/lib/api";
-import type { ProblemDetail, Submission, CodeSubmission, ProblemSolution, SubmissionFeedback } from "@/lib/types";
+import type { ProblemDetail, Submission, CodeSubmission, CodeRun, ProblemSolution, SubmissionFeedback } from "@/lib/types";
 
 const DIFFICULTY_COLOR: Record<string, string> = {
   EASY: "var(--stat-teal)",
@@ -36,6 +37,10 @@ export default function PracticePage() {
 
   const [codeSubmissions, setCodeSubmissions] = useState<CodeSubmission[]>([]);
   const [code, setCode] = useState("");
+  const [codeRun, setCodeRun] = useState<CodeRun | null>(null);
+  const [runCode, setRunCode] = useState("");
+  const [runningCode, setRunningCode] = useState(false);
+  const [runError, setRunError] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -111,9 +116,32 @@ export default function PracticePage() {
   function handleCodeChange(value: string) {
     setCode(value);
     latestCodeRef.current = value;
+    setRunError("");
     if (!touchedRef.current && problem) {
       touchedRef.current = true;
       api.post("/api/progress/touch", { problemId: problem.id }).catch(() => {});
+    }
+  }
+
+  async function handleRunPublicTests() {
+    if (!problem || !latestCodeRef.current.trim()) {
+      setRunError("Write some code before running public tests.");
+      return;
+    }
+    setRunError("");
+    setRunningCode(true);
+    try {
+      const response = await api.post<{ run: CodeRun }>("/api/code-runs", {
+        problemId: problem.id,
+        code: latestCodeRef.current,
+        language: "python",
+      });
+      setCodeRun(response.run);
+      setRunCode(latestCodeRef.current);
+    } catch (e) {
+      setRunError(e instanceof ApiError ? e.message : "Public tests could not run.");
+    } finally {
+      setRunningCode(false);
     }
   }
 
@@ -408,22 +436,61 @@ export default function PracticePage() {
                 />
               </>
             ) : (
-              <div
-                className="rounded-xl overflow-hidden"
-                style={{ border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
-              >
-                <div className="px-4 py-2 text-[11px] flex items-center justify-between" style={{ background: "var(--card-elevated)", borderBottom: "1px solid var(--border)", fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}>
-                  <span>{problem.solutionCodeLanguage}</span>
-                  <span>Write or paste your implementation</span>
+              <>
+                <div
+                  className="rounded-xl overflow-hidden"
+                  style={{ border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}
+                >
+                  <div className="px-4 py-2 text-[11px] flex items-center justify-between" style={{ background: "var(--card-elevated)", borderBottom: "1px solid var(--border)", fontFamily: "var(--font-display)", color: "var(--text-tertiary)" }}>
+                    <span>{problem.solutionCodeLanguage}</span>
+                    <span>CodeMirror workspace · OnlineCompiler public tests</span>
+                  </div>
+                  <CodeEditor value={code} onChange={handleCodeChange} />
                 </div>
-                <textarea
-                  value={code}
-                  onChange={(e) => handleCodeChange(e.target.value)}
-                  spellCheck={false}
-                  className="w-full outline-none resize-none px-4 py-3 text-[13px] leading-relaxed"
-                  style={{ height: "min(72vh, 760px)", background: "var(--card)", color: "var(--text-primary)", fontFamily: "var(--font-display)" }}
-                />
+              <div className="rounded-xl p-4 space-y-3" style={{ background: "var(--card)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-[12px] font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--text-primary)" }}>Public tests</div>
+                    <div className="text-[11px] mt-1" style={{ color: "var(--text-tertiary)" }}>Runs the trusted public harness for this problem.</div>
+                  </div>
+                  <button
+                    onClick={handleRunPublicTests}
+                    disabled={runningCode}
+                    className="px-3 py-2 rounded-lg text-[12px] font-semibold cursor-pointer disabled:opacity-50"
+                    style={{ background: "var(--accent)", color: "var(--bg)", border: "1px solid var(--accent)" }}
+                  >
+                    {runningCode ? "Running..." : "Run public tests"}
+                  </button>
+                </div>
+                {runError && <div className="text-xs rounded-lg px-3 py-2" style={{ color: "var(--danger)", background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.2)" }}>{runError}</div>}
+                {codeRun && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
+                      <span>{codeRun.summary.passed}/{codeRun.summary.total} tests passed</span>
+                      <span style={{ color: codeRun.status === "PASSED" ? "var(--stat-teal)" : codeRun.status === "PROVIDER_ERROR" ? "var(--stat-amber)" : "var(--danger)" }}>{codeRun.status}</span>
+                    </div>
+                    {runCode !== code && <div className="text-[11px]" style={{ color: "var(--stat-amber)" }}>Code changed since this run. Run again before submitting.</div>}
+                    {codeRun.tests.map((test) => (
+                      <div key={test.id} className="rounded-lg px-3 py-2 flex items-start justify-between gap-3" style={{ background: "var(--card-elevated)", border: "1px solid var(--border)" }}>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>{test.name}</div>
+                          {test.status === "provider_error" ? (
+                            <div className="text-[11px] mt-1 break-words" style={{ color: "var(--stat-amber)" }}>
+                              OnlineCompiler could not execute this test. Your code was not classified as a runtime failure; retry shortly.
+                              {test.error ? ` ${test.error}` : ""}
+                            </div>
+                          ) : test.error ? (
+                            <div className="text-[11px] mt-1 break-words" style={{ color: "var(--danger)" }}>{test.error}</div>
+                          ) : null}
+                          {!test.error && test.status !== "provider_error" && test.output && <pre className="text-[11px] mt-1 whitespace-pre-wrap" style={{ color: "var(--text-tertiary)" }}>{test.output}</pre>}
+                        </div>
+                        <span className="text-[11px] font-semibold shrink-0" style={{ color: test.passed ? "var(--stat-teal)" : test.status === "provider_error" ? "var(--stat-amber)" : "var(--danger)" }}>{test.passed ? "PASS" : test.status.replace("_", " ")}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
+              </>
             )}
 
             {error && (

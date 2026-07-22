@@ -19,14 +19,14 @@ specific choices were made see `docs/DECISIONS.md`.
                     |   Next.js Route Handlers          |
                     |   (src/app/api/**, serverless)    |
                     +---------------+-------------------+
-                        |            |              |
-             verify token|      Prisma ORM       Anthropic API
-                        |            |              |  (optional, grading only)
-                        v            v              v
-              +----------------+ +----------+  +-----------+
-              | Firebase Admin | |  Neon     |  |  Claude   |
-              | (Auth only)    | | Postgres  |  |  Haiku    |
-              +----------------+ +----------+  +-----------+
+                        |            |              |              |
+             verify token|      Prisma ORM       Gemini API      OnlineCompiler
+                        |            |              |          (server-only REST)
+                        v            v              v              v
+              +----------------+ +----------+  +-----------+  +----------------+
+              | Firebase Admin | |  Neon     |  |  Gemini   |  | Python sandbox |
+              | (Auth only)    | | Postgres  |  | diagrams  |  | public tests  |
+              +----------------+ +----------+  +-----------+  +----------------+
 ```
 
 Two identity systems, deliberately: Firebase Auth remains the source of truth for "who is
@@ -81,18 +81,18 @@ queue, database, CDN, API gateway, ...for System Design; class/interface/abstrac
 class/enum for LLD), so users aren't limited to tldraw's generic geometry tools when
 sketching a design.
 
-**Grading layer (`src/lib/grading/**`).** Two parallel pipelines, one per submission type,
-both blending a deterministic structural score with an optional AI score so grading never
-hard-fails when `ANTHROPIC_API_KEY` is unset:
-- Canvas (System Design + LLD diagrams): extract a `{nodes, edges}` graph from the tldraw
-  snapshot (`extract.ts`), fuzzy-match it against the problem's rubric
-  (`structural.ts`), and blend 50/50 with a Claude tool-call evaluation (`ai.ts`) via
-  `gradeSubmission()`.
-- Code (LLD only): a coarse text-presence check against the rubric's expected class/
-  relationship vocabulary (`codeStructural.ts`), blended 30/70 (structural/AI, since the
-  text-presence check is a much weaker signal than the canvas graph match) with a Claude
-  evaluation focused on correctness, structure, and OOP-principle adherence (`code.ts`)
-  via `gradeCodeSubmission()`.
+**Grading layer (`src/lib/grading/**`).** Two pipelines preserve deterministic scoring while
+using separate providers:
+- Canvas diagrams: extract a bounded `{nodes, edges}` graph, match it against the rubric,
+  and optionally blend 50/50 with Gemini semantic feedback. The ordered Gemini chain is
+  `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, and `gemini-2.5-flash-lite`; all failures
+  degrade to structural-only scoring.
+- LLD code: keep the coarse structural signal and the existing Anthropic code-quality
+  evaluator with its 30/70 structural/AI blend. Code execution is a separate public-test
+  phase and does not silently change the score formula.
+
+Provider keys are server-only. No raw tldraw snapshot is sent to Gemini, and no browser
+code can call the OnlineCompiler REST API.
 
 Both write a versioned submission row (`Submission`/`CodeSubmission`), update
 `ProblemProgress` (bestScore is a running max, status flips to `SOLVED` at
@@ -110,9 +110,9 @@ Practice page (canvas edit)
    -> POST /api/submissions { problemId, canvasSnapshot }
         -> extractGraph(canvasSnapshot)
         -> matchStructural(graph, rubric)              [always runs, deterministic]
-        -> gradeWithAi(...)                             [runs if ANTHROPIC_API_KEY set]
+        -> gradeWithAi(...)                             [Gemini chain if configured]
         -> blend 50/50 (or structural-only as fallback)
-        -> Submission.create (new version)
+        -> Submission.create (new version + safe grading metadata)
         -> ProblemProgress.upsert (bestScore = max, status per SOLVED_THRESHOLD)
         -> StudyEntry.create (problem_attempt | problem_solved)
    -> client re-fetches submission history, renders score + feedback

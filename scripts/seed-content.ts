@@ -97,6 +97,7 @@ async function seedProblem(spec: ProblemSpec, categoryIdBySlug: Map<string, stri
     solutionCode: spec.solutionCode,
     solutionCodeLanguage: spec.solutionCodeLanguage ?? "python",
     solutionSteps: (spec.solutionSteps ?? []) as object,
+    executionSpec: spec.executionSpec ? (spec.executionSpec as object) : undefined,
     rubric: spec.rubric as object,
   };
 
@@ -123,9 +124,14 @@ async function main() {
   console.log("\nSeed complete.");
 }
 
-main()
-  .catch((e) => {
+void (async () => {
+  try {
+    await main();
+  } catch (e) {
     console.error("Seed failed:", e);
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+    process.exitCode = 1;
+  } finally {
+    await prisma.$disconnect();
+    process.exit(process.exitCode ?? 0);
+  }
+})();

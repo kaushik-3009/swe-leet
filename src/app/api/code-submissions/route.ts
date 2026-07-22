@@ -2,15 +2,23 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { getUidFromRequest } from "@/lib/auth-server";
-import { ok, err, toErrorResponse } from "@/lib/api-response";
+import { ok, err, errWithHeaders, toErrorResponse } from "@/lib/api-response";
 import { toCodeSubmission, asRubric } from "@/lib/mappers";
 import { gradeCodeSubmission } from "@/lib/grading";
 import { todayStr } from "@/lib/dates";
+import { executePublicTests } from "@/lib/compiler/publicTests";
+import { hashCode } from "@/lib/compiler/onlineCompiler";
+import { consumeRateLimit } from "@/lib/rate-limit";
+
+const db = prisma as unknown as {
+  problem: { findUnique(args: unknown): Promise<{ id: string; title: string; description: string; rubric: unknown; track: string; executionSpec: unknown } | null> };
+  codeRun: { create(args: { data: unknown }): Promise<unknown> };
+};
 
 const bodySchema = z.object({
   problemId: z.string().min(1),
   code: z.string().min(1).max(20000),
-  language: z.string().min(1).max(30).default("python"),
+  language: z.literal("python").default("python"),
 });
 
 const SOLVED_THRESHOLD = Number(process.env.SOLVED_THRESHOLD ?? 70);
@@ -19,14 +27,19 @@ export async function POST(req: NextRequest) {
   try {
     const uid = await getUidFromRequest(req);
     const { problemId, code, language } = bodySchema.parse(await req.json());
+    const rate = await consumeRateLimit({ subject: uid, bucket: "code-submit", limit: 5, windowMs: 60_000 });
+    if (!rate.allowed) {
+      return errWithHeaders("Too many code submissions. Try again shortly.", 429, { "Retry-After": String(rate.retryAfterSeconds) });
+    }
 
-    const problem = await prisma.problem.findUnique({
+    const problem = await db.problem.findUnique({
       where: { id: problemId },
-      select: { id: true, title: true, description: true, rubric: true, track: true },
+      select: { id: true, title: true, description: true, rubric: true, track: true, executionSpec: true },
     });
     if (!problem) return err("Problem not found", 404);
     if (problem.track !== "LLD") return err("Code submissions are only supported for LLD problems", 422);
 
+    const publicRun = await executePublicTests(code, problem.executionSpec, problem.id);
     const { score, feedback, structuralResult } = await gradeCodeSubmission({
       problemTitle: problem.title,
       problemDescription: problem.description,
@@ -54,6 +67,24 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    if (publicRun) {
+      await db.codeRun.create({
+        data: {
+          userId: uid,
+          problemId,
+          codeSubmissionId: submission.id,
+          compiler: publicRun.compiler,
+          language,
+          codeHash: hashCode(code),
+          codeBytes: Buffer.byteLength(code, "utf8"),
+          status: publicRun.status,
+          result: publicRun.result,
+          durationMs: publicRun.durationMs,
+          memoryKb: publicRun.memoryKb,
+        },
+      });
+    }
+
     const solved = score >= SOLVED_THRESHOLD;
     const existingProgress = await prisma.problemProgress.findUnique({
       where: { userId_problemId: { userId: uid, problemId } },
@@ -78,7 +109,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return ok({ submission: toCodeSubmission(submission), status: progress.status, bestScore: progress.bestScore }, 201);
+    return ok({
+      submission: toCodeSubmission(submission),
+      status: progress.status,
+      bestScore: progress.bestScore,
+      publicRun,
+    }, 201);
   } catch (e) {
     return toErrorResponse(e);
   }

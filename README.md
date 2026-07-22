@@ -2,160 +2,124 @@
 
 # System Design Tracker
 
-A study log and streak tracker for system design prep: the LeetCode heatmap and accountability aid, for the part of interview prep that doesn't have one.
+A study tracker and interview-practice platform for System Design and Low-Level Design preparation.
 
-![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css&logoColor=white)
-![Firebase](https://img.shields.io/badge/Firebase-FFCA28?style=flat&logo=firebase&logoColor=black)
-![Vercel](https://img.shields.io/badge/Deployed_on-Vercel-000000?style=flat&logo=vercel&logoColor=white)
-
-[Live Demo](https://swe-leet.vercel.app) 
+![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=flat&logo=next.js&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat&logo=typescript&logoColor=white)
+![Postgres](https://img.shields.io/badge/Postgres-Neon-00E5A0?style=flat&logo=postgresql&logoColor=white)
+![Firebase Auth](https://img.shields.io/badge/Auth-Firebase-FFCA28?style=flat&logo=firebase&logoColor=black)
 
 </div>
 
-<!-- Screenshot: drop a real one in /docs and swap the src below before publishing -->
-<p align="center">
-  <img src="./public/homepage-screenshot.png" alt="System Design Tracker dashboard" width="800">
-</p>
+## What it does
 
----
+- Curated System Design and LLD study plans with resources, articles, hints, and progressive solution reveals.
+- A tldraw practice canvas with deterministic graph extraction and rubric matching.
+- Optional Gemini semantic diagram feedback with the configured model fallback chain:
+  `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite`, `gemini-2.5-flash-lite`.
+- LLD code mode with typed Python public-test contracts. The current content has 15 LLD problems and no hidden tests.
+- Firebase Authentication with Postgres and Prisma for profiles, activity, progress, submissions, and social relationships.
+- Explicitly labeled synthetic staging data for deterministic demo and load checks. Synthetic rows are excluded from default metrics.
 
-## Table of Contents
+## Tech stack
 
-- [Why](#why)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Data Model](#data-model)
-- [Running It Yourself](#running-it-yourself)
-- [Roadmap](#roadmap)
-- [License](#license)
+- Next.js 16 App Router and React 19
+- TypeScript and Tailwind CSS v4
+- Prisma 7 with Neon Postgres and `@prisma/adapter-neon`
+- Firebase Authentication, with Firebase Admin token verification on the server
+- tldraw for the diagram canvas
+- Vitest for unit, API, and content-integrity tests
 
-## Why
-
-LeetCode's submission heatmap is the reason I was consistent at Data Structure and Algorithms. After the initial friction wore off, the streak itself became the motivation. System design prep has no equivalent: you read a chapter or sketch an architecture, and there's no tangible record it happened. I'd study hard for a week, take a few days off, and lose track of what I'd already covered. 
-
-This app applies the same feedback loop: log a session, watch the heatmap fill in, and the entry log count pile up.
-
-## Features
-
-| Feature | Description |
-|---|---|
-| **Activity heatmap** | Year-view of study activity, GitHub-contributions style |
-| **Weekly progress** | Per-day session counts, Mon–Sun, against a weekly goal |
-| **Stats** | Total entries, study days, unique topics covered |
-| **Social** | Search by username, follow others, view their heatmap |
-
-## Tech Stack
-
-- **Framework:** Next.js
-- **Styling:** Tailwind CSS
-- **Auth & Database:** Firebase Authentication, Firestore
-- **Hosting:** Vercel
-
-No custom backend —> the frontend talks to Firebase directly.
-
-## Data Model
-
-```mermaid
-flowchart LR
-  U["users/{uid}"] -->|1:N| E["entries/{id}"]
-  U --> UN["usernames/{username}"]
-  U -->|writes| FG["following/{uid}/*"]
-  U -->|written to on follow| FL["followers/{uid}/*"]
-```
-
-`entries` are queried per-user, ordered by `createdAt`, and aggregated client-side into the heatmap and weekly chart.
-
-## Running It Yourself
-
-<details>
-<summary><strong>Local setup, Firebase config, and deployment</strong> (click to expand)</summary>
+## Local setup
 
 ### Prerequisites
 
-Node 18+, a Firebase project.
+- Node.js 20 or newer
+- A Firebase project with Email/Password authentication enabled
+- A Neon Postgres database
 
 ### Install
 
 ```bash
-git clone https://github.com/kaushik-3009/swe-leet.git
-cd swe-leet
 npm install
+cp .env.example .env
 ```
 
-Create `.env.local`:
+Fill in the Firebase Admin and database variables. Keep `DATABASE_URL` pooled for runtime traffic and `DATABASE_URL_UNPOOLED` for Prisma migrations.
 
+Generate the Prisma client and apply the checked-in migrations:
+
+```bash
+npm run db:generate
+npm run db:deploy
+npm run seed:content
 ```
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
-```
+
+For local development, `npm run db:migrate` can be used after reviewing the pending migration against the target database.
+
+Start the app:
 
 ```bash
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), create an account, start logging.
+Open <http://localhost:3000> and create an account. Firebase Auth creates the identity, and the signup route creates the matching Postgres `User` row.
 
-### Firebase Setup
+## Environment variables
 
-1. [Create a Firebase project](https://console.firebase.google.com)
-2. Enable **Authentication** → Email/Password
-3. Create a **Firestore Database** (test mode is fine to start)
-4. Add a **Web App** and copy the config into `.env.local`
-5. Deploy these Firestore rules:
+Copy `.env.example` and add values locally. Important server-only variables include:
 
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{uid} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /usernames/{username} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /entries/{id} {
-      allow read: if true;
-      allow write: if request.auth != null;
-    }
-    match /following/{uid}/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.uid == uid;
-    }
-    match /followers/{uid}/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if true;
-    }
-  }
-}
+- `FIREBASE_ADMIN_PROJECT_ID`, `FIREBASE_ADMIN_CLIENT_EMAIL`, `FIREBASE_ADMIN_PRIVATE_KEY`
+- `DATABASE_URL`, `DATABASE_URL_UNPOOLED`
+- `GEMINI_API_KEY` for optional diagram semantics
+- `ONLINECOMPILER_REST_API_KEY` for server-side Python execution
+- `DEMO_ADMIN_SECRET` for any explicitly enabled demo compatibility route
+
+The LLD CodeMirror workspace is application-controlled; OnlineCompiler runs trusted public tests server-side. Never put the REST key, Gemini key, Firebase Admin private key, or database password in client code.
+
+## Testing
+
+```bash
+npm test
+npm run lint
+npx tsc --noEmit
+npm run build
 ```
 
-> **Privacy note:** `users`, `usernames`, and `entries` are readable by anyone with a Firestore client, not just through the app UI — this is what makes the follow/heatmap feature work without a backend. It also means entry content (topic + resource text, not just the heatmap) is public for every account. To make logs private-by-default with an opt-in public heatmap, split entry metadata (date + count, for the heatmap) from entry content (topic/resource) into separate documents with separate read rules.
+The current automated verification baseline is 90 passing tests across 15 files, successful
+TypeScript validation, a successful production build, an up-to-date Prisma migration state,
+and a clean `git diff --check`. Full-repository lint still reports pre-existing errors in
+`AuthPage.tsx`, `AuthProvider.tsx`, `Navbar.tsx`, and `ThemeProvider.tsx`; changed feature
+files lint clean. Content integrity tests validate that every LLD reference solution and
+public harness are present; a controlled provider smoke pass currently verifies all 15
+reference solutions remotely. Provider integrations should be tested with mocked responses
+in unit tests and with rotated credentials only in a controlled staging environment; see
+[`docs/SETUP.md`](./docs/SETUP.md) for smoke-check commands.
 
-6. Create a composite index on `entries`: `userId` (ASC) + `createdAt` (DESC). The app links directly to the index-creation page if Firestore reports it's missing.
+## Synthetic demo data
 
-### Demo Data
+Synthetic data is not real-user evidence. It must only be generated in staging or another explicitly approved non-production environment:
 
-Visit `/seed` after deploying to create 5 demo users with 60 days of study history each — useful for testing search and follow without manually creating accounts.
+```bash
+npm run demo:generate -- --run-id=synthetic-demo-v1
+npm run metrics:report
+npm run metrics:report -- --include-synthetic
+```
 
-### Deployment
+The generator creates 75 deterministic profiles labeled `isSynthetic=true`, along with repeatable sample activity and progress. The default metrics report excludes them. The optional synthetic section is labeled as test data and must not be described as adoption, DAU, retention, or customer growth.
 
-Push to GitHub, import the repo on [Vercel](https://vercel.com), add the Firebase env vars, deploy.
+## Architecture and operations
 
-</details>
+See the detailed guides in [`docs/`](./docs/):
 
-## Roadmap
-
-- [ ] Editable/deletable entries from the dashboard
-- [ ] Per-user weekly goal configuration
-- [ ] Export study history as CSV
+- [`ARCHITECTURE.md`](./docs/ARCHITECTURE.md)
+- [`API.md`](./docs/API.md)
+- [`SCHEMA.md`](./docs/SCHEMA.md)
+- [`LLD.md`](./docs/LLD.md)
+- [`ENV.md`](./docs/ENV.md)
+- [`SETUP.md`](./docs/SETUP.md)
+- [`RUNBOOK.md`](./docs/RUNBOOK.md)
 
 ## License
 
-MIT — see [`LICENSE`](./LICENSE).
+MIT. See [`LICENSE`](./LICENSE).

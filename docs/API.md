@@ -26,8 +26,8 @@ Auth: send `Authorization: Bearer <Firebase ID token>` on any route marked **aut
 | `/api/entries` | POST | required | Body `{ topic, resource }`. Always creates for the caller; `kind: manual`. |
 | `/api/entries/[id]` | DELETE | required | Owner-only (403 otherwise). |
 | `/api/heatmap?userId=` | GET | public | `{ [date: string]: count }`, derived from entries. |
-| `/api/demo/seed` | POST | required | Seeds 5 demo users (idempotent) + 30 days of random entries for the caller. |
-| `/api/demo/clear` | POST | required | Deletes all of the caller's entries. |
+| `/api/demo/seed` | POST | guarded | Disabled by default. When explicitly enabled it requires `x-demo-admin-secret` and points operators to the staging CLI generator. It never mutates the authenticated caller. |
+| `/api/demo/clear` | POST | disabled | Destructive synthetic cleanup is not exposed over HTTP. |
 
 ## Follow graph
 
@@ -55,9 +55,25 @@ Auth: send `Authorization: Bearer <Firebase ID token>` on any route marked **aut
 
 | Route | Method | Auth | Notes |
 |---|---|---|---|
-| `/api/submissions` | POST | required | Body `{ problemId, canvasSnapshot }`. Grades via `src/lib/grading`, persists a new `Submission` version, updates `ProblemProgress` (bestScore = max, status = SOLVED if score ≥ `SOLVED_THRESHOLD`), writes a `StudyEntry` (`kind: problem_attempt` or `problem_solved`) — this is the integration point with the existing heatmap/entry log. |
+| `/api/submissions` | POST | required | Body `{ problemId, canvasSnapshot }`. Grades via `src/lib/grading`, persists a new `Submission` version plus safe Gemini/structural grading metadata, updates `ProblemProgress` (bestScore = max, status = SOLVED if score ≥ `SOLVED_THRESHOLD`), and writes a `StudyEntry` (`kind: problem_attempt` or `problem_solved`). |
 | `/api/submissions?problemId=` | GET | required | Caller's own submissions for a problem, newest version first. |
 | `/api/submissions/[id]` | GET | required | Owner-only. |
+
+## LLD public code runs
+
+| Route | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/code-runs` | POST | required | Body `{ problemId, code, language: "python" }`. Loads the trusted problem harness, executes with `python-3.14`, persists bounded named test results, and does not update progress or the activity heatmap. Rate limited per user. |
+| `/api/code-runs?problemId=` | GET | required | Returns the caller's own recent run summaries for the problem. Raw exploratory source is not stored in `CodeRun`. |
+
+## LLD code submissions
+
+| Route | Method | Auth | Notes |
+|---|---|---|---|
+| `/api/code-submissions` | POST | required | Body `{ problemId, code, language: "python" }`. Runs the trusted public harness, grades code quality, persists a versioned submission plus linked `CodeRun`, updates progress/activity, and returns the bounded public-run result. |
+| `/api/code-submissions?problemId=` | GET | required | Returns the caller's own code-submission history for a problem. |
+
+Compiler/runtime failures caused by the submitted source are normal result statuses. OnlineCompiler outages, generic internal execution errors, timeouts, and rate limits are normalized separately as `PROVIDER_ERROR`/provider states and surfaced without exposing provider credentials or raw unbounded output.
 
 ## Reviews
 

@@ -1,70 +1,89 @@
 # Database Schema
 
-Postgres (Neon), managed via Prisma. Source of truth: `prisma/schema.prisma`.
+Postgres on Neon, managed through Prisma. The source of truth is `prisma/schema.prisma`.
 
-## Core (migrated from Firestore)
+## Identity and synthetic-data isolation
 
 ### `User`
+
 | Field | Type | Notes |
 |---|---|---|
-| `id` | `String` (PK) | Firebase Auth `uid` — not a generated id |
-| `username` | `String` `@unique` | lowercase, 3-30 chars, `[a-zA-Z0-9_]` |
-| `displayName` | `String` | original-case username at signup |
-| `email` | `String` | lowercase |
-| `createdAt` | `DateTime` | |
+| `id` | `String` primary key | Firebase Auth uid |
+| `username` | unique string | Lowercase handle |
+| `displayName` | string | Display label |
+| `email` | string | Lowercase email |
+| `isSynthetic` | boolean | Explicit synthetic/demo marker, defaults to `false` |
+| `syntheticRunId` | nullable string | Fixture run ownership for reporting and cleanup |
+| `createdAt` | timestamp | Creation time |
 
-### `Follow`
-Composite PK `(followerId, followingId)`, both FKs to `User.id`, cascade on delete. Replaces the old Firestore `following/{uid}/userFollowing/{targetUid}` + `followers/{uid}/userFollowers/{followerUid}` dual-write subcollections with a single flat table.
+Synthetic data is identified by schema fields, not by an id prefix. Metrics default to `isSynthetic=false` and only include synthetic rows in a separately labeled report section.
 
-### `StudyEntry`
-| Field | Type | Notes |
-|---|---|---|
-| `id` | `String` (PK, `cuid()`) | matches the original Firestore doc id after migration |
-| `userId` | `String` (FK) | |
-| `topic` / `resource` | `String` | as before |
-| `date` | `String` | `YYYY-MM-DD`, unchanged format — this is what the heatmap groups by |
-| `createdAt` | `DateTime` | |
-| `kind` | enum `manual \| problem_attempt \| problem_solved` | new — lets problem activity flow into the same heatmap/entry log as manual study sessions |
-| `problemId` | `String?` (FK, `SetNull` on delete) | set when `kind != manual` |
+## Activity and roadmap
 
-Indexes: `(userId, createdAt)` (entry list ordering), `(userId, date)` (heatmap aggregation).
+- `StudyEntry` stores manual, problem, article, and resource activity. It is keyed to `User` and optionally `Problem`.
+- `Category` stores typed System Design/LLD topics, articles, and resources.
+- `ResourceProgress` stores one completion row per user/resource.
+- `ProblemProgress` stores one row per user/problem with status, best score, and update time.
+- `Problem.executionSpec` stores trusted content-authored public Python test contracts. It is loaded server-side and is not accepted from clients.
 
-## Roadmap content
-
-### `Category`
-Track (`SYSTEM_DESIGN | LLD`), `slug` (unique), `title`, `description`, `order`. 11 seeded categories, 5-6 per track, ordered foundational → advanced.
-
-### `Problem`
-Belongs to a `Category`. Fields: `track`, `slug` (unique), `title`, `description` (markdown), `difficulty` (`EASY|MEDIUM|HARD`), `tags: String[]`, `estMinutes`, `order`, `referenceExplanation` (markdown), `referenceDiagram` (`Json` — a tldraw `TLStoreSnapshot`), `rubric` (`Json`):
+An execution spec has the shape:
 
 ```ts
-interface Rubric {
-  requiredComponents: string[];
-  requiredConnections: { from: string; to: string; label?: string }[];
-  weights?: Record<string, number>; // reserved, unused by the current grader
+{
+  language: "python",
+  compiler: "python-3.14",
+  harnessVersion: 1,
+  publicTests: [{ id: string, name: string, harness: string }]
 }
 ```
 
-29 seeded problems (15 System Design, 14 LLD) — see `content/system-design/problems.ts` and `content/lld/problems.ts`.
+The current content authoring layer uses a trusted Python harness string for each of the 15 LLD entries. The seed path persists the execution contract for server-side execution.
 
-## Per-user progress & submissions
-
-### `ProblemProgress`
-Composite PK `(userId, problemId)`. `status: NOT_STARTED | IN_PROGRESS | SOLVED`, `bestScore` (max across all submissions), `updatedAt`. Created lazily — first row appears when a user touches the canvas (`POST /api/progress/touch`) or submits.
+## Submissions and grading
 
 ### `Submission`
-One row per graded attempt. `userId`, `problemId`, `version` (auto-incrementing per user+problem), `canvasSnapshot` (`Json`, a tldraw `TLStoreSnapshot`), `score` (0-100), `feedback` (`Json`, `{ strengths, missing, improvements }`), `structuralResult` (`Json`, the raw rubric-match output). Versioned so users can revise and resubmit without losing history.
 
-### `Review`
-`problemId`, `userId`, `rating` (1-5), `body`, `createdAt`. Simple problem reviews; not surfaced in the UI yet beyond the API (`GET/POST /api/reviews`) — left in place for the roadmap page to grow into.
+Stores a versioned diagram attempt: user, problem, canvas snapshot, score, feedback, deterministic structural result, and optional safe `gradingMetadata`.
 
-## Entity relationship summary
+`gradingMetadata` may contain provider, served model, attempted model names, fallback index, latency, grading version, and `ai` or `structural_only` status. It must not contain API keys, prompts, raw provider responses, raw provider errors, or full candidate graph payloads.
 
-```
-User ──< Follow >── User (self-referential, follower/following)
-User ──< StudyEntry >── Problem (optional)
+A unique constraint on `(userId, problemId, version)` protects version allocation from duplicate concurrent writes.
+
+### `CodeSubmission`
+
+Stores a versioned LLD code submission, its score/feedback, and structural result. It has the same unique version constraint. Code-quality grading remains the existing Anthropic-backed 30/70 structural/AI blend in this phase.
+
+### `CodeRun`
+
+Stores an authenticated public-test execution result without duplicating pre-submit source code:
+
+| Field | Purpose |
+|---|---|
+| `userId`, `problemId` | Ownership and filtering |
+| `codeSubmissionId` | Optional link for an explicit graded submission |
+| `compiler`, `language` | Currently restricted to `python-3.14` / `python` |
+| `codeHash`, `codeBytes` | Correlation and size metadata without raw exploratory source storage |
+| `status` | Passed, failed, compile/runtime error, timeout, provider error, or rate limited |
+| `result` | Bounded named public-test results and plain-text-safe output/errors |
+| `durationMs`, `memoryKb` | Provider execution metrics when returned |
+| `createdAt` | Run timestamp |
+
+Exploratory runs do not create `StudyEntry` rows or change `ProblemProgress`. Explicit submissions remain the progression event.
+
+### `RateLimitBucket`
+
+Relational rate-limit counters keyed by subject, bucket, and time window. This is used instead of process-local memory because Vercel requests can execute on different instances.
+
+## Relationships
+
+```text
+User ──< Follow >── User
+User ──< StudyEntry >── Problem?
 User ──< ProblemProgress >── Problem
 User ──< Submission >── Problem
-User ──< Review >── Problem
+User ──< CodeSubmission >── Problem
+User ──< CodeRun >── Problem
+CodeRun ──> CodeSubmission?
+Category ──< Resource
 Category ──< Problem
 ```

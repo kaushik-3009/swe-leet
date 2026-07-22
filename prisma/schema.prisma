@@ -9,16 +9,19 @@ datasource db {
 // ─── Core (migrated off Firestore) ─────────────────────────────────────────
 
 model User {
-  id          String   @id // Firebase Auth uid
-  username    String   @unique
-  displayName String
-  email       String
-  createdAt   DateTime @default(now())
+  id            String   @id // Firebase Auth uid
+  username      String   @unique
+  displayName   String
+  email         String
+  isSynthetic   Boolean  @default(false)
+  syntheticRunId String?
+  createdAt     DateTime @default(now())
 
   entries          StudyEntry[]
   progress         ProblemProgress[]
   submissions      Submission[]
   codeSubmissions  CodeSubmission[]
+  codeRuns         CodeRun[]
   reviews          Review[]
   following        Follow[]           @relation("Follower")
   followers        Follow[]           @relation("Following")
@@ -26,6 +29,7 @@ model User {
   weeklyGoals      WeeklyGoal[]
 
   @@index([username])
+  @@index([isSynthetic, syntheticRunId])
 }
 
 model Follow {
@@ -173,12 +177,14 @@ model Problem {
   solutionCode         String? // reference implementation (LLD problems - design is code, not just a diagram)
   solutionCodeLanguage String      @default("python")
   solutionSteps        Json? // ordered [{title, body}] for the step-by-step progressive reveal
+  executionSpec        Json? // trusted Python public-test contract for LLD execution
   rubric               Json // { requiredComponents: string[], requiredConnections: {from:string,to:string}[], weights?: Record<string, number> }
 
   category        Category          @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   progress        ProblemProgress[]
   submissions     Submission[]
   codeSubmissions CodeSubmission[]
+  codeRuns        CodeRun[]
   reviews         Review[]
   entries         StudyEntry[]
 
@@ -214,11 +220,13 @@ model Submission {
   score            Int
   feedback         Json // { strengths: string[], missing: string[], improvements: string[] }
   structuralResult Json // { matchedComponents, missingComponents, matchedConnections, missingConnections, coverage }
+  gradingMetadata  Json? // safe evaluator/provider metadata; never prompts, keys, or raw provider responses
   createdAt        DateTime @default(now())
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, problemId, version])
   @@index([userId, problemId, version])
 }
 
@@ -241,8 +249,56 @@ model CodeSubmission {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   problem Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  codeRuns CodeRun[]
 
+  @@unique([userId, problemId, version])
   @@index([userId, problemId, version])
+}
+
+enum CodeRunStatus {
+  PASSED
+  FAILED
+  COMPILE_ERROR
+  RUNTIME_ERROR
+  TIMEOUT
+  PROVIDER_ERROR
+  RATE_LIMITED
+}
+
+model CodeRun {
+  id             String        @id @default(cuid())
+  userId         String
+  problemId      String
+  codeSubmissionId String?
+  compiler       String
+  language       String
+  codeHash       String
+  codeBytes      Int
+  status         CodeRunStatus
+  result         Json
+  durationMs     Int?
+  memoryKb       Int?
+  createdAt      DateTime      @default(now())
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem        Problem        @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  codeSubmission CodeSubmission? @relation(fields: [codeSubmissionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, problemId, createdAt])
+  @@index([codeSubmissionId])
+  @@index([codeHash])
+}
+
+model RateLimitBucket {
+  id          String   @id @default(cuid())
+  subject     String
+  bucket      String
+  windowStart DateTime
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([subject, bucket, windowStart])
+  @@index([subject, bucket])
 }
 
 model WeeklyGoal {

@@ -1,5 +1,236 @@
 import type { ProblemSpec } from "../schema";
 
+
+const ParkingLotHarness = `from datetime import datetime, timedelta
+
+lot = ParkingLot([Level(1, [ParkingSpot("m1", VehicleSize.MOTORCYCLE), ParkingSpot("c1", VehicleSize.CAR)])], rate_per_hour=3.0)
+car = Vehicle("CAR-1", VehicleSize.CAR)
+ticket = lot.park(car)
+assert ticket is not None and ticket.spot.spot_id == "c1"
+assert lot.park(Vehicle("BUS-1", VehicleSize.BUS)) is None
+ticket.entry_time = datetime(2020, 1, 1, 0, 0)
+ticket.exit_time = datetime(2020, 1, 2, 2, 0)
+assert ticket.fee(3.0) == 78.0
+charged = lot.exit("CAR-1")
+assert charged >= 3.0 and ticket.spot.vehicle is None
+`;
+
+const LibraryManagementHarness = `from datetime import date, timedelta
+
+book = Book("978-1", "A Tale", "Author")
+copy = BookCopy("copy-1", book)
+member = Member("member-1", "Reader")
+library = Library()
+library.add_copy(copy)
+assert [b.isbn for b in library.search("tale")] == ["978-1"]
+loan = library.checkout(member, "978-1")
+assert loan is not None and copy.status == CopyStatus.ON_LOAN
+assert library.checkout(Member("member-2", "Other"), "978-1") is None
+loan.due_date = date.today() + timedelta(days=1)
+assert library.return_copy("copy-1") == 0.0
+assert copy.status == CopyStatus.AVAILABLE
+assert library.checkout(member, "978-1") is not None
+`;
+
+const ObserverStockTickerHarness = `class RecordingObserver(Observer):
+    def __init__(self):
+        self.updates = []
+    def update(self, symbol, price):
+        self.updates.append((symbol, price))
+
+first = RecordingObserver()
+second = RecordingObserver()
+ticker = StockTicker()
+ticker.subscribe(first)
+ticker.subscribe(second)
+ticker.set_price("ACME", 10.0)
+assert first.updates == [("ACME", 10.0)] and second.updates == [("ACME", 10.0)]
+ticker.unsubscribe(second)
+ticker.set_price("ACME", 11.0)
+assert first.updates[-1] == ("ACME", 11.0) and len(second.updates) == 1
+class BrokenObserver(Observer):
+    def update(self, symbol, price):
+        raise RuntimeError("broken observer")
+ticker.subscribe(BrokenObserver())
+ticker.set_price("ACME", 12.0)
+assert first.updates[-1] == ("ACME", 12.0)
+`;
+
+const StrategyPaymentProcessorHarness = `checkout = Checkout()
+card = checkout.process(12.5, CreditCardPayment("4111111111111111"))
+assert card.success and "1111" in card.message
+paypal = checkout.process(4.0, PayPalPayment("buyer@example.com"))
+assert paypal.success and "PayPal" in paypal.message
+credit = StoreCreditPayment(10.0)
+assert not checkout.process(11.0, credit).success
+assert credit.available_balance == 10.0
+assert checkout.process(6.0, credit).success and credit.available_balance == 4.0
+assert not checkout.process(0.0, credit).success
+`;
+
+const FactoryNotificationServiceHarness = `class FakeClient:
+    def __init__(self):
+        self.calls = []
+    def send_mail(self, content): self.calls.append(("email", content))
+    def send_text(self, content): self.calls.append(("sms", content))
+    def push(self, content): self.calls.append(("push", content))
+
+smtp, sms, push = FakeClient(), FakeClient(), FakeClient()
+factory = NotificationFactory(smtp, sms, push)
+for kind, client in (("email", smtp), ("sms", sms), ("push", push)):
+    notification = factory.create(kind)
+    notification.send("hello")
+    assert client.calls == [(kind, "hello")]
+try:
+    factory.create("carrier-pigeon")
+    assert False, "unknown notification type should fail"
+except ValueError:
+    pass
+`;
+
+const TrafficLightControllerHarness = `light = TrafficLight()
+assert light.current.name == "RED" and light.current.duration_seconds() == 30
+assert light.advance().name == "GREEN"
+assert light.advance().name == "YELLOW"
+assert light.advance().name == "RED"
+`;
+
+const ElevatorSystemHarness = `elevator = Elevator()
+elevator.request_floor(1)
+elevator.request_floor(3)
+assert elevator.direction == Direction.UP
+elevator.step()
+assert elevator.current_floor == 1 and elevator.door == DoorState.OPEN
+# The farther request is serviced after the nearer request in the same direction.
+elevator.close_doors()
+elevator.step()
+elevator.step()
+assert elevator.current_floor == 3 and elevator.door == DoorState.OPEN
+`;
+
+const VendingMachineHarness = `machine = VendingMachine({"A": Item("Snack", 1.25, 1), "B": Item("Sold out", 2.0, 0)})
+try:
+    machine.insert_payment(1.0)
+    assert False, "payment before selection should fail"
+except ValueError:
+    pass
+try:
+    machine.select("B")
+    assert False, "out-of-stock item should fail"
+except ValueError:
+    pass
+machine.select("A")
+machine.insert_payment(0.25)
+assert isinstance(machine.state, PaymentState)
+assert machine.cancel() == 0.25 and isinstance(machine.state, IdleState)
+machine.select("A")
+machine.insert_payment(2.0)
+assert machine.inventory["A"].stock == 0
+assert machine.change_due == 0.75 and isinstance(machine.state, IdleState)
+`;
+
+const BoundedBlockingQueueHarness = `import threading
+import time
+
+queue = BoundedBlockingQueue(1)
+queue.put("first")
+finished = []
+producer = threading.Thread(target=lambda: (queue.put("second"), finished.append(True)))
+producer.start()
+time.sleep(0.05)
+assert not finished
+assert queue.take() == "first"
+producer.join(1.0)
+assert finished == [True] and queue.take() == "second"
+`;
+
+const InProcessRateLimiterHarness = `import threading
+
+limiter = TokenBucketRateLimiter(2, 0.0)
+results = []
+threads = [threading.Thread(target=lambda: results.append(limiter.try_acquire())) for _ in range(8)]
+for thread in threads: thread.start()
+for thread in threads: thread.join(1.0)
+assert sum(results) == 2
+assert not limiter.try_acquire()
+`;
+
+const MovieTicketBookingHarness = `movie = Movie("Example")
+seat_a, seat_b = Seat("A1"), Seat("A2")
+showtime = Showtime(movie, "Theater 1", "20:00", [seat_a, seat_b])
+other_showtime = Showtime(movie, "Theater 1", "22:00", [seat_a, seat_b])
+manager = SeatLockManager()
+service = BookingService(manager)
+assert manager.hold(showtime, "A1")
+assert not manager.hold(showtime, "A1")
+assert manager.confirm(showtime, "A1", "user-1")
+assert not manager.hold(showtime, "A1")
+assert manager.hold(other_showtime, "A1")
+booking = service.book(showtime, ["A2"], "user-2")
+assert booking is not None and booking.seat_ids == ["A2"]
+assert showtime._booked == {"A1", "A2"}
+assert service.book(showtime, ["A1"], "user-3") is None
+`;
+
+const RideHailingDispatchHarness = `index = DriverLocationIndex()
+near = Driver("d-near", Location(0.5, 0.0))
+far = Driver("d-far", Location(2.0, 0.0))
+index.upsert(near)
+index.upsert(far)
+dispatch = DispatchService(index)
+first = dispatch.match("rider-1", Location(0.0, 0.0), search_radius=3.0)
+assert first is not None and first.driver.driver_id == "d-near"
+second = dispatch.match("rider-2", Location(0.0, 0.0), search_radius=3.0)
+assert second is not None and second.driver.driver_id == "d-far"
+assert dispatch.match("rider-3", Location(0.0, 0.0), search_radius=0.1) is None
+dispatch.complete(first)
+assert near.status == DriverStatus.AVAILABLE and first.status == "completed"
+`;
+
+const ChessGameEngineHarness = `board = Board()
+white_king = Position(0, 0)
+black_king = Position(7, 7)
+queen_at = Position(1, 1)
+pawn_at = Position(2, 2)
+board.squares[white_king] = King("white")
+board.squares[black_king] = King("black")
+board.squares[queen_at] = Queen("white")
+board.squares[pawn_at] = Pawn("black")
+assert Position(2, 2) in board.squares[queen_at].get_legal_moves(board, queen_at)
+assert Position(1, 2) in board.squares[queen_at].get_legal_moves(board, queen_at)
+game = Game(board)
+assert game.try_move(queen_at, pawn_at)
+assert game.turn == "black" and isinstance(board.squares[pawn_at], Queen)
+assert not game.try_move(white_king, Position(0, 1))
+`;
+
+const SplitwiseExpenseSharingHarness = `equal = EqualSplit()
+assert equal.compute_shares(30.0, ["a", "b", "c"]) == {"a": 10.0, "b": 10.0, "c": 10.0}
+percentage = PercentageSplit({"a": 50.0, "b": 50.0})
+assert percentage.compute_shares(20.0, ["a", "b"]) == {"a": 10.0, "b": 10.0}
+try:
+    PercentageSplit({"a": 20.0, "b": 20.0})
+    assert False, "percentages must total 100"
+except ValueError:
+    pass
+sheet = BalanceSheet()
+sheet.apply(Expense("a", 30.0, ["a", "b", "c"], equal))
+sheet.apply(Expense("b", 10.0, ["a", "b"], ExactAmountSplit({"a": 10.0, "b": 0.0})))
+settlements = sheet.simplified_balances()
+assert settlements == [("c", "a", 10.0)]
+`;
+
+const LruCacheDesignHarness = `cache = LRUCache(2)
+cache.put("a", 1)
+cache.put("b", 2)
+assert cache.get("a") == 1
+cache.put("c", 3)
+assert cache.get("b") is None
+assert cache.get("a") == 1 and cache.get("c") == 3
+cache.put("a", 10)
+assert cache.get("a") == 10
+`;
+
 export const lldProblems: ProblemSpec[] = [
   {
     slug: "parking-lot",
@@ -61,6 +292,7 @@ A spot-assignment strategy (nearest-first vs. best-fit) is a natural Strategy-pa
 - A vehicle re-entering while an unpaid ticket from a previous visit is still open (should this be allowed?).
 - Multiple entrances/exits needing to agree on spot availability concurrently (a hint that spot assignment needs to be atomic under concurrent entry attempts).`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: ParkingLotHarness },
     solutionCode: `from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
@@ -117,7 +349,8 @@ class Ticket:
 
     def fee(self, rate_per_hour: float) -> float:
         end = self.exit_time or datetime.now()
-        hours = max(1, (end - self.entry_time).seconds // 3600 + 1)
+        duration_seconds = max(0.0, (end - self.entry_time).total_seconds())
+        hours = max(1, int((duration_seconds + 3599) // 3600))
         return hours * rate_per_hour
 
 
@@ -210,6 +443,7 @@ A **Loan** connects a **Member** to a specific BookCopy with checkout and due da
 - A member losing a book (a copy that never gets returned) - does the system need a "lost" BookCopy status?
 - Renewing a loan (extending the due date) while it's still active vs. after it's already overdue.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: LibraryManagementHarness },
     solutionCode: `from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
@@ -352,6 +586,7 @@ This decoupling is exactly why Observer is the standard answer whenever a prompt
 - Thread safety if subscribe/unsubscribe can happen concurrently with a price update (worth a one-line callout even if not implemented).
 - Whether observers get the full price object or just a delta - affects how much logic lives in the observer vs. the subject.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: ObserverStockTickerHarness },
     solutionCode: `from abc import ABC, abstractmethod
 
 
@@ -462,6 +697,7 @@ This is easy to confuse with Factory: Strategy is about swapping *behavior* (how
 - Partial payment across two strategies (splitting a charge between store credit and a card) - a good "what if" to raise even if out of scope.
 - Idempotency: what happens if \`pay()\` is called twice for the same order due to a client retry?`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: StrategyPaymentProcessorHarness },
     solutionCode: `from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -573,6 +809,7 @@ Contrast with Strategy in the previous problem: here the *caller doesn't choose 
 
 - What happens when construction itself fails (invalid phone number format for SMS)? The factory or the constructor should surface that clearly.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: FactoryNotificationServiceHarness },
     solutionCode: `from abc import ABC, abstractmethod
 
 
@@ -682,6 +919,7 @@ This is exactly why the "add a new state without touching existing logic" requir
 
 - An emergency override (force red immediately) - a good extension to discuss: does it bypass the normal next() chain, and how does state resume afterward?`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: TrafficLightControllerHarness },
     solutionCode: `from abc import ABC, abstractmethod
 
 
@@ -800,6 +1038,7 @@ A single RequestQueue with client-side sorting is simpler to implement than two 
 - A request for the floor the elevator is currently idling at (should open doors immediately, no movement needed).
 - What happens to an in-flight request if the elevator is taken out of service mid-cycle.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: ElevatorSystemHarness },
     solutionCode: `from abc import ABC, abstractmethod
 from enum import Enum
 
@@ -932,6 +1171,7 @@ Allowing cancel from every state (returning to Idle, refunding any inserted mone
 - Multiple items with different prices selected in sequence without completing a purchase.
 - A coin returned mid-insertion (jam) - does the machine's state need to account for partial/failed insertion?`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: VendingMachineHarness },
     solutionCode: `from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -1083,6 +1323,7 @@ A single condition variable is simpler to implement but wakes every waiter (incl
 
 - Capacity of zero (a "rendezvous" queue where put and take must happen simultaneously) - a good edge case to raise even if not required.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: BoundedBlockingQueueHarness },
     solutionCode: `import threading
 from collections import deque
 
@@ -1177,6 +1418,7 @@ Either way, the critical section is small and fast (a lock or CAS loop around th
 
 - Clock going backward (NTP adjustment) - elapsed-time computation should treat a negative delta as zero, not as "refill nothing forever."`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: InProcessRateLimiterHarness },
     solutionCode: `import threading
 import time
 
@@ -1268,6 +1510,7 @@ A pessimistic lock (hold the seat the instant selection starts) gives better use
 
 - A refund/cancellation after booking needs to release the seat back to available for that showtime.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: MovieTicketBookingHarness },
     solutionCode: `import threading
 import time
 from dataclasses import dataclass, field
@@ -1410,6 +1653,7 @@ A geohash-based index is simpler to implement than a full quadtree and works wel
 
 - A driver going offline (or their app crashing) mid-assignment, after being marked unavailable but before the ride starts - needs a way to release them back to available.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: RideHailingDispatchHarness },
     solutionCode: `import math
 import threading
 from dataclasses import dataclass
@@ -1552,6 +1796,7 @@ Draw the class model, showing how piece-specific movement logic is organized.`,
 - Pawn promotion (reaching the last rank) - the pawn becomes a different piece type, worth a one-line callout.
 - Stalemate (no legal moves but not in check) vs. checkmate (no legal moves and in check) are different end states that share the "no legal moves" check.`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: ChessGameEngineHarness },
     solutionCode: `from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -1730,6 +1975,7 @@ The greedy creditor/debtor matching algorithm minimizes transaction *count* but 
 
 - Removing a member from a group with outstanding balances - what happens to their share of past expenses?`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: SplitwiseExpenseSharingHarness },
     solutionCode: `from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -1882,6 +2128,7 @@ Using a doubly (not singly) linked list is what makes removal O(1): removing a n
 - Capacity of zero or one - special-case worth mentioning even if not implemented.
 - Thread safety if accessed concurrently (out of scope here, but worth a one-line callout, tying back to the Concurrency Patterns topic).`,
     solutionCodeLanguage: "python",
+    executionSpec: { language: "python", harness: LruCacheDesignHarness },
     solutionCode: `class Node:
     def __init__(self, key, value):
         self.key = key
