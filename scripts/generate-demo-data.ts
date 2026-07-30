@@ -129,7 +129,9 @@ async function main() {
   const entries = users.flatMap((user, index) => buildEntries(user.id, index, runId, random));
   if (entries.length > 0) await prisma.studyEntry.createMany({ data: entries, skipDuplicates: true });
 
-  const problems = await prisma.problem.findMany({ select: { id: true } });
+  // Keep this result explicitly typed: Prisma's generated client can be treated
+  // as `any` when its generated declarations are unavailable during a clean build.
+  const problems: Array<{ id: string }> = await prisma.problem.findMany({ select: { id: true } });
   const progress = users.flatMap((user, userIndex) =>
     problems
       .filter((_, problemIndex) => (problemIndex + userIndex) % 4 === 0)
