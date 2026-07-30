@@ -44,7 +44,11 @@ async function seedCategories() {
       ...(c.articleContent ? [{ kind: "ARTICLE" as const, title: c.articleTitle ?? `${c.title} article`, url: null, order: 0 }] : []),
     ];
 
-    const existing = await prisma.resource.findMany({ where: { categoryId: row.id } });
+    // Preserve the selected fields' type when Prisma's generated declarations
+    // are refreshed in a clean build environment.
+    const existing: Array<{ id: string; kind: string; title: string }> = await prisma.resource.findMany({
+      where: { categoryId: row.id },
+    });
     const existingByTitle = new Map(existing.map((r) => [`${r.kind}:${r.title}`, r]));
 
     for (const r of rows) {
